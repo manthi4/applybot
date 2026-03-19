@@ -1,0 +1,445 @@
+# ApplyBot
+
+A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, PostgreSQL for persistence, paid aggregator APIs for scraping, Anthropic SDK for AI, and a FastAPI + Streamlit dashboard.
+
+---
+
+## How It Works
+
+ApplyBot is organized as a pipeline with four main stages, a central dashboard, and a cloud scheduler:
+
+```
+Profile ──→ Discovery ──→ Application Prep ──→ Tracking
+                              ↕                    ↕
+                          Dashboard            Gmail
+                              ↕
+                       Cloud Scheduler
+```
+
+1. **Profile** — Maintains a structured reference document of your skills, experiences, and interests. All other stages consult this. On first run, a bootstrap agent parses your existing resume, extracts a structured profile, identifies gaps, and runs an interactive CLI flow to fill them in.
+2. **Discovery** — Searches multiple job boards daily using LLM-generated queries, deduplicates results with fuzzy matching, and uses Claude to rank jobs by relevance to your profile (0-100 score with reasoning).
+3. **Application** — For each approved job, tailors your resume (rephrase/reorder only — never fabricate), drafts answers to common application questions, generates a cover letter, and flags any profile gaps that need human input. Creates an Application record for review.
+4. **Tracking** — Manages application lifecycle through a validated state machine (DRAFT → READY_FOR_REVIEW → APPROVED → SUBMITTED → RECEIVED → INTERVIEW/OFFER/REJECTED). Scans Gmail to auto-detect status updates from applied-to companies.
+5. **Dashboard** — FastAPI REST API + Streamlit UI for reviewing job queue, managing applications, editing profile, and viewing pipeline statistics.
+6. **Scheduler** — GCP Cloud Functions triggered by Cloud Scheduler for automated daily execution.
+
+**Human-in-the-loop**: The agent prepares everything, but never submits without explicit approval. Safety guardrail: the agent never submits without explicit approval.
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Notes |
+|---|---|---|
+| Language | Python 3.12+ | black/ruff/mypy configured |
+| LLM | Anthropic Claude (direct SDK) | Sonnet for cost-efficient tasks, Opus for complex reasoning; no LangChain |
+| Database | SQLAlchemy + Alembic | SQLite for dev, PostgreSQL (Supabase free tier) for prod |
+| API | FastAPI | Internal API + dashboard backend; auto-generated OpenAPI spec |
+| Frontend | Streamlit | Dashboard MVP; Python-native, swappable later |
+| Job Scraping | SerpAPI, Greenhouse API, Lever API, lxml | Paid aggregator + free public APIs |
+| Resume | python-docx | Parse and generate .docx preserving formatting |
+| Deduplication | rapidfuzz | Fuzzy token_sort_ratio matching (threshold 85) |
+| Cloud | GCP Cloud Functions + Cloud Scheduler + Cloud Run | Daily automation + dashboard hosting |
+
+---
+
+## Project Structure
+
+```
+applybot/
+├── README.md               # This file
+├── STATUS.md               # Current progress and next steps
+├── core_idea.md            # Original project vision
+├── pyproject.toml          # Dependencies and tool config
+├── alembic.ini             # Alembic config
+├── alembic/                # Database migrations
+├── data/                   # Local data (resume, DB, exports)
+│   └── applybot.db
+├── src/applybot/
+│   ├── config.py           # Pydantic Settings (env-based)
+│   ├── models/             # SQLAlchemy ORM (Job, Application, UserProfile)
+│   ├── llm/                # Anthropic Claude SDK wrapper
+│   ├── profile/            # Profile CRUD + .docx resume parsing/generation
+│   ├── discovery/          # Multi-source job scraping + dedup + ranking
+│   │   └── scrapers/       # Pluggable scraper implementations
+│   ├── application/        # Resume tailoring + Q&A + cover letters
+│   ├── tracking/           # State machine + Gmail integration
+│   └── dashboard/          # FastAPI REST API + Streamlit UI
+├── scheduler/              # GCP Cloud Function entry points (planned)
+└── tests/                  # pytest suite
+```
+
+Each component under `src/applybot/` has its own README describing its purpose, API, and boundaries.
+
+---
+
+## Architecture
+
+### Data Flow
+
+```
+┌─────────────────────────────────────────────┐
+│       Dashboard (FastAPI + Streamlit)        │
+│  REST API for jobs, apps, profile, summary   │
+└──────────────┬──────────────────────────────┘
+               │
+┌──────────────┴──────────────────────────────┐
+│           Tracking Layer                     │
+│  State machine + Gmail email classification  │
+│  + Notifications (email/Slack)               │
+└──────────────┬──────────────────────────────┘
+               │
+┌──────────────┴──────────────────────────────┐
+│       Application Preparation                │
+│  Resume Tailor → Q&A → Cover Letter          │
+│  (honesty guardrail: no fabrication)         │
+│  Human review before submission              │
+└──────────────┬──────────────────────────────┘
+               │
+┌──────────────┴──────────────────────────────┐
+│         Discovery Pipeline (async)           │
+│  Query Builder → Scrapers (parallel) →       │
+│  Deduplicator → Ranker → Save to DB         │
+└──────────────┬──────────────────────────────┘
+               │
+┌──────────────┴──────────────────────────────┐
+│    Shared Foundation                         │
+│  Models (ORM) · LLM Client · Profile · Config│
+└─────────────────────────────────────────────┘
+```
+
+### Cross-Cutting Dependencies
+
+- **LLM Client** — Used by: Query Builder, Ranker, Resume Tailor, Question Answerer, Gmail classifier, Cover Letter generator
+- **Profile** — Central source of truth consulted by Discovery (query building, ranking) and Application (tailoring, answering)
+- **Models** — Shared database schema accessed by all components
+
+---
+
+## Data Models
+
+### Job
+
+| Column | Type | Notes |
+|---|---|---|
+| id | int (PK) | Auto-increment |
+| title | str | Job title |
+| company | str | Company name |
+| location | str | Job location |
+| description | text | Full job description |
+| url | str | Application URL |
+| source | JobSource enum | SERPAPI, GREENHOUSE, LEVER, EU_REMOTE_JOBS, MANUAL |
+| posted_date | date | When the job was posted |
+| discovered_date | datetime | When we found it |
+| relevance_score | int | 0-100 score from ranker |
+| status | JobStatus enum | NEW → REVIEWING → APPROVED → APPLIED / SKIPPED / REJECTED |
+
+### UserProfile
+
+| Column | Type | Notes |
+|---|---|---|
+| id | int (PK) | Auto-increment |
+| name | str | Full name |
+| email | str | Contact email |
+| summary | text | Professional summary |
+| skills | JSON | Structured skills data |
+| experiences | JSON | Work experience entries |
+| education | JSON | Education entries |
+| preferences | JSON | Job preferences (roles, locations, salary, etc.) |
+| resume_path | str | Path to base .docx resume |
+
+### Application
+
+| Column | Type | Notes |
+|---|---|---|
+| id | int (PK) | Auto-increment |
+| job_id | int (FK → Job) | Which job this applies to |
+| tailored_resume_path | str | Path to generated .docx |
+| cover_letter | text | Generated cover letter |
+| answers | JSON | dict of question → answer pairs |
+| status | ApplicationStatus | DRAFT → READY_FOR_REVIEW → APPROVED → SUBMITTED → RECEIVED → INTERVIEW → OFFER / REJECTED / WITHDRAWN |
+| created_at | datetime | When the application was prepared |
+| submitted_at | datetime | When it was actually submitted |
+
+### ApplicationStatusUpdate
+
+| Column | Type | Notes |
+|---|---|---|
+| id | int (PK) | Auto-increment |
+| application_id | int (FK → Application) | Audit trail |
+| status | ApplicationStatus | New status |
+| source | UpdateSource | MANUAL, GMAIL, SYSTEM |
+| details | text | Optional notes |
+| timestamp | datetime | When the change occurred |
+
+---
+
+## Component Details
+
+### LLM Client (`llm/`)
+
+Thin wrapper around the Anthropic SDK providing three call patterns:
+
+- **`complete(prompt, system, model, temperature)`** → `str` — Simple text completion
+- **`structured_output(prompt, output_type, system, model)`** → `T` — Returns a Pydantic model; auto-strips markdown code fences from JSON
+- **`with_tools(prompt, tools, system, model)`** → `Message` — Tool-use call returning the full Anthropic Message for inspection
+
+Configurable model selection (sonnet for fast/cheap tasks, opus for complex reasoning). Module-level singleton `llm = LLMClient()`.
+
+### Profile (`profile/`)
+
+**ProfileManager** — CRUD operations for the UserProfile table:
+- `get_profile()`, `get_or_create_profile(name, email)`, `update_profile(**kwargs)`
+- `get_skills()`, `export_profile_json(path)`, `import_profile_json(path)`
+
+**Resume** — .docx parsing and generation:
+- `parse_resume(path)` → `ResumeData` (name, contact_info, sections with title + content)
+- `generate_resume(data, template_path, output_path)` → creates tailored .docx preserving template formatting
+
+**Bootstrap flow** (planned): On first run, parse existing resume → extract structured profile → store in DB → agent identifies gaps → interactive CLI to fill them in.
+
+### Discovery (`discovery/`)
+
+**Pipeline**: Query Builder → Scrapers (parallel, async) → Deduplicator → Ranker → Save to DB
+
+**Query Builder** — Uses Claude + user profile to generate 6 varied search queries (e.g., "machine learning engineer robotics", "ML infrastructure", "applied ML robotics"). Falls back to sensible defaults if no profile exists.
+
+**Scrapers** — Pluggable via `BaseScraper` ABC. Each returns `list[RawJob]`:
+
+| Scraper | Source | API/Method | Coverage |
+|---|---|---|---|
+| SerpAPIScraper | Google Jobs | SerpAPI paid API | LinkedIn, Indeed, Glassdoor aggregated |
+| GreenhouseScraper | Greenhouse | Public boards API (`boards-api.greenhouse.io`) | Companies using Greenhouse ATS |
+| LeverScraper | Lever | Public postings API (`api.lever.co`) | Companies using Lever ATS |
+| EuRemoteJobsScraper | EuRemoteJobs | HTML scraping with lxml | EU remote positions |
+| *(Workday)* | *(deferred)* | *Complex, per-company tenants* | *Deferred to future phase* |
+
+All scrapers run concurrently via `asyncio.gather()`. One scraper failing doesn't block others.
+
+**Deduplicator** — Fuzzy matching on (title + company + location) using rapidfuzz `token_sort_ratio` with threshold of 85. Normalizes URLs by stripping tracking parameters. Merges duplicates, keeps earliest discovered_date.
+
+**Ranker** — Claude evaluates each job against the user profile in batches of 5. Returns `(job, score: 0-100, reasoning: str)`. Filters out jobs below configurable threshold (default: 50).
+
+**Orchestrator** — `run_discovery()` ties it all together and returns `DiscoveryResult` with counts: total_scraped, after_dedup, above_threshold, new_jobs_saved, top_matches.
+
+### Application (`application/`)
+
+**Resume Tailor** — Input: job description + user profile + base resume. Claude analyzes job requirements, generates a `TailoringPlan` (summary rewrite + per-section edits), then applies it to produce a tailored .docx.
+
+**Strict guardrail**: The agent can only reorder/rephrase existing experiences from the profile. It must NOT fabricate skills, experiences, or qualifications.
+
+**Question Answerer** — Drafts answers to common application questions:
+- "Why are you interested in this role?"
+- "Why do you want to work at {company}?"
+- "Describe your most relevant experience for this role."
+- "What is your greatest strength related to this position?"
+
+Custom questions can be added per job. If the profile lacks required info, returns `ProfileGap` objects (question + context) for human input.
+
+**Cover Letter Generator** — Claude writes a 3-4 paragraph letter using only real profile data.
+
+**Preparer** — Orchestrates the full flow: tailor resume → answer questions → generate cover letter → create Application record (status=READY_FOR_REVIEW). Also has `prepare_all_approved()` to batch-process all approved jobs.
+
+**Human Review** — Dashboard shows job details side-by-side with tailored resume (downloadable .docx) and draft answers. User can approve, edit, reject, or request re-generation.
+
+### Tracking (`tracking/`)
+
+**State Machine** — Enforced valid transitions:
+
+```
+DRAFT → READY_FOR_REVIEW, WITHDRAWN
+READY_FOR_REVIEW → APPROVED, DRAFT, WITHDRAWN
+APPROVED → SUBMITTED, WITHDRAWN
+SUBMITTED → RECEIVED, REJECTED, WITHDRAWN
+RECEIVED → INTERVIEW, REJECTED, WITHDRAWN
+INTERVIEW → OFFER, REJECTED, WITHDRAWN
+OFFER → WITHDRAWN
+REJECTED → (terminal)
+WITHDRAWN → (terminal)
+```
+
+Every transition creates an `ApplicationStatusUpdate` audit record with source (MANUAL/GMAIL/SYSTEM) and timestamp.
+
+**Gmail Integration** — Google Gmail API with OAuth2 (offline access):
+1. Looks up companies from applied-to applications
+2. Searches Gmail: `from:{company} OR subject:{company} newer_than:3d`
+3. Claude classifies each email → `EmailClassification` (is_application_related, status, confidence, summary)
+4. If confidence ≥ 0.7 and application-related → auto-updates application status
+
+**Notifications** (planned) — Email/Slack alerts when: new high-relevance jobs found, applications ready for review, status changes detected.
+
+### Dashboard (`dashboard/`)
+
+**FastAPI Backend** — REST endpoints:
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/jobs` | List jobs (filter by status, min_score; limit ≤ 500) |
+| GET | `/jobs/{id}` | Job details + match reasoning |
+| POST | `/jobs/{id}/approve` | Mark job for application preparation |
+| POST | `/jobs/{id}/skip` | Skip a job |
+| GET | `/applications` | List applications (filter by status; limit ≤ 500) |
+| GET | `/applications/{id}` | Application details + materials |
+| POST | `/applications/{id}/review` | Approve/reject/edit application |
+| GET | `/profile` | Current user profile |
+| PUT | `/profile` | Update profile fields |
+| GET | `/dashboard/summary` | Stats: job/application counts by status |
+
+OpenAPI spec is auto-generated — other modules can use this API programmatically.
+
+**Streamlit Frontend** — Pages:
+- **Dashboard Overview** — Stats cards, recent activity, pipeline funnel chart
+- **Job Queue** — Table of discovered jobs with relevance scores, approve/skip actions
+- **Application Review** — Side-by-side view (job description | tailored resume + answers), approve/reject
+- **Profile Editor** — Name/email/summary form + full profile data export
+- **Settings** — Configuration management
+
+---
+
+## Configuration
+
+Pydantic Settings, loading from environment variables or a `.env` file:
+
+```env
+# Required
+ANTHROPIC_API_KEY=sk-ant-...
+SERPAPI_KEY=...
+
+# Database (defaults to local SQLite)
+DATABASE_URL=sqlite:///data/applybot.db
+
+# Gmail (optional, for tracking)
+GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
+
+# Discovery tuning
+DISCOVERY_RELEVANCE_THRESHOLD=50    # Min relevance score (0-100)
+DISCOVERY_MAX_JOBS_PER_RUN=100
+
+# Application limits
+MAX_APPLICATIONS_PER_DAY=10
+
+# LLM models
+ANTHROPIC_MODEL_FAST=claude-sonnet-4-20250514     # Cost-efficient tasks
+ANTHROPIC_MODEL_SMART=claude-sonnet-4-20250514    # Complex reasoning
+ANTHROPIC_MAX_RETRIES=3
+```
+
+---
+
+## Setup
+
+```bash
+# Install (with dev tools and dashboard)
+pip install -e ".[dev,dashboard]"
+
+# Initialize database
+python -c "from applybot.models.base import init_db; init_db()"
+
+# Run tests
+pytest
+```
+
+---
+
+## Key Design Decisions
+
+| Decision | Rationale |
+|---|---|
+| Direct Anthropic SDK (no LangChain) | Simpler, fewer deps, more debuggable |
+| SQLite dev / PostgreSQL prod | No DB server needed locally; swap via `DATABASE_URL` |
+| Supabase PostgreSQL for MVP | Free tier, easy setup, connection pooling included |
+| Human-in-the-loop | Agent never submits without explicit approval |
+| Resume honesty guardrail | Tailoring can only rephrase/reorder, not fabricate |
+| SerpAPI for LinkedIn/Indeed | Reliable aggregator API, avoids anti-bot issues |
+| Free APIs for Greenhouse/Lever | Public boards APIs, no auth needed |
+| Streamlit for dashboard MVP | Fast to build, Python-native, swappable later |
+| Lazy engine creation | Models import without requiring a DB connection |
+| Async scraper execution | All scrapers run in parallel; one failing doesn't block others |
+| Batch LLM ranking | Jobs sent in groups of 5 to reduce API calls and costs |
+
+---
+
+## Cloud Deployment Plan
+
+### GCP Cloud Functions
+
+| Function | Trigger | Schedule | Purpose |
+|---|---|---|---|
+| `discovery_fn` | Cloud Scheduler | Daily at 8am | Run discovery orchestrator, send notification with summary |
+| `application_fn` | Pub/Sub or Cloud Scheduler | 2x daily | Prepare applications for approved jobs |
+| `tracking_fn` | Cloud Scheduler | 2x daily | Scan Gmail for status updates |
+
+### Infrastructure
+
+- **Database**: Supabase PostgreSQL (free tier for MVP, Cloud SQL for production)
+- **Dashboard**: GCP Cloud Run (FastAPI) + Streamlit Community Cloud (or same Cloud Run)
+- **Secrets**: GCP Secret Manager for API keys
+- **Auth**: Service account with minimal permissions
+- **Scheduling**: Cloud Scheduler cron jobs
+
+---
+
+## Cost Considerations
+
+- **SerpAPI**: ~$50/month for 5,000 searches
+- **Claude API**: Costs depend on usage; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
+- **Greenhouse/Lever APIs**: Free (public)
+- **Supabase**: Free tier (500MB, 2 compute units) sufficient for MVP
+- **GCP Cloud Functions**: Free tier covers light usage
+
+Cost tracking per pipeline run is planned but not yet implemented.
+
+---
+
+## Scope & Exclusions
+
+**In scope (prepare & review)**:
+- Automated job discovery across multiple boards
+- AI-powered resume tailoring and application preparation
+- Human review and approval workflow
+- Application lifecycle tracking
+- Gmail-based status detection
+
+**Explicitly excluded**:
+- **Auto-submission** — Actually filling and submitting application forms on job sites. Too fragile, varies per site. Some sites have apply APIs, others would need browser automation (Playwright). Deferred.
+- **Workday scraper** — Complex, each company has a different Workday tenant. Deferred.
+- **Mobile app** — Desktop/web dashboard only for now.
+- **Multi-user support** — Single-user system.
+
+---
+
+## Implementation Phases
+
+### Phase 1: Foundation ✅
+Project skeleton, shared models, config, database, LLM client wrapper.
+
+### Phase 2: Profile ✅
+Profile manager (CRUD, JSON import/export), resume parser/generator (.docx).
+
+### Phase 3: Discovery ✅
+Scraper interface + 4 implementations (SerpAPI, Greenhouse, Lever, EuRemoteJobs), query builder, deduplicator, ranker, orchestrator.
+
+### Phase 4: Application ✅
+Resume tailoring agent (with honesty guardrail), question answerer, cover letter generator, application preparer orchestrator.
+
+### Phase 5: Tracking ✅
+Application tracker state machine, Gmail integration with email classification.
+
+### Phase 6: Dashboard ✅
+FastAPI REST API (10 endpoints), Streamlit frontend (4 pages).
+
+### Phase 7: Cloud Deployment ⬚
+GCP Cloud Functions, Cloud Scheduler, Cloud Run, Supabase PostgreSQL, Secret Manager. Not yet started.
+
+---
+
+## Future Work
+
+- **CLI entrypoints** — `python -m applybot.cli discover/prepare/serve`
+- **Profile bootstrap flow** — Import resume → extract profile → fill gaps interactively
+- **Company target lists** — Curated list of robotics/ML company slugs for Greenhouse/Lever (could also discover from SerpAPI results)
+- **Notification system** — Email/Slack alerts for new jobs, ready applications, status changes
+- **Workday scraper** — Per-company tenants, complex integration
+- **Auto-submission** — Form filling via apply APIs or browser automation (Playwright)
+- **Cost tracking** — Per-run visibility into LLM API and scraper costs
+- **Google OAuth setup** — Automated consent flow script for Gmail integration
