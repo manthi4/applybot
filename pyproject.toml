@@ -1,0 +1,70 @@
+[project]
+name = "applybot"
+version = "0.1.0"
+description = "AI-powered job application automation"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.40.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "alembic>=1.14.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "python-docx>=1.1.0",
+    "httpx>=0.28.0",
+    "rapidfuzz>=3.10.0",
+    "psycopg>=3.2.0",
+]
+
+[project.optional-dependencies]
+dashboard = [
+    "streamlit>=1.40.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "mypy>=1.14.0",
+    "ruff>=0.8.0",
+    "black>=24.10.0",
+    "pre-commit>=4.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+plugins = ["pydantic.mypy"]
+disable_error_code = ["misc"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["applybot.dashboard.frontend"]
+ignore_errors = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.black]
+target-version = ["py312"]
+line-length = 88
