@@ -1,4 +1,6 @@
-FROM python:3.12-slim AS builder
+# Explicitly target amd64 so images built on ARM machines (e.g. Apple Silicon, Windows ARM)
+# are always compatible with Cloud Run, which only supports linux/amd64.
+FROM --platform=linux/amd64 python:3.12-slim AS builder
 
 WORKDIR /app
 
@@ -12,7 +14,7 @@ COPY src/ src/
 # Install the package and dependencies
 RUN pip install --no-cache-dir .
 
-FROM python:3.12-slim
+FROM --platform=linux/amd64 python:3.12-slim
 
 WORKDIR /app
 
