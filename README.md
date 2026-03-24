@@ -49,12 +49,17 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 applybot/
 ├── README.md               # This file
 ├── STATUS.md               # Current progress and next steps
+├── DEPLOY.md               # Full deployment guide (manual + CI/CD)
 ├── core_idea.md            # Original project vision
 ├── pyproject.toml          # Dependencies and tool config
 ├── alembic.ini             # Alembic config
 ├── alembic/                # Database migrations
 ├── data/                   # Local data (resume, DB, exports)
 │   └── applybot.db
+├── .github/workflows/
+│   ├── terraform.yml       # Terraform plan/apply CI workflow
+│   └── docker.yml          # Docker build & push CI workflow
+├── infra/                  # Terraform IaC (GCP Cloud Run, Cloud SQL, etc.)
 ├── src/applybot/
 │   ├── config.py           # Pydantic Settings (env-based)
 │   ├── models/             # SQLAlchemy ORM (Job, Application, UserProfile)
@@ -376,6 +381,38 @@ pytest
 - **Auth**: Service account with minimal permissions
 - **Scheduling**: Cloud Scheduler cron jobs
 
+### CI/CD (GitHub Actions)
+
+Two workflows in `.github/workflows/` automate infrastructure and image deployment:
+
+| Workflow | File | Triggers | What it does |
+|---|---|---|---|
+| **Terraform** | `terraform.yml` | Manual dispatch (plan/apply) or push to `main` with `--tf-apply` in commit message | Authenticates to GCP, runs `terraform init` → `plan` → `apply` in `infra/` |
+| **Docker** | `docker.yml` | Manual dispatch (optional `image_tag`) or push to `main` with `--docker` in commit message | Builds Docker image, tags with version + `latest`, pushes to Artifact Registry |
+
+Both workflows authenticate via a GCP service account key stored in GitHub Secrets and use a concurrency group to prevent parallel runs.
+
+**Quick usage:**
+
+```bash
+# Terraform
+gh workflow run terraform.yml                    # plan + apply
+gh workflow run terraform.yml -f action=plan     # plan only
+
+# Docker
+gh workflow run docker.yml                       # tag = short SHA
+gh workflow run docker.yml -f image_tag=v2       # custom tag
+
+# Commit-message triggers (push to main)
+git commit -m "update infra --tf-apply"
+git commit -m "fix bug --docker"
+```
+
+**Required GitHub Secrets:** `GCP_SA_KEY`, `GCP_PROJECT_ID`, `TF_VAR_DB_PASSWORD`, `TF_VAR_ANTHROPIC_API_KEY`, `TF_VAR_SERPAPI_KEY`.
+**Optional GitHub Variables:** `GCP_REGION` (default: `us-central1`), `IMAGE_TAG` (default: `latest`).
+
+See [DEPLOY.md](DEPLOY.md) § "CI/CD with GitHub Actions" for full setup instructions (GCS bucket for Terraform state, CI service account creation, secrets configuration).
+
 ---
 
 ## Cost Considerations
@@ -427,8 +464,8 @@ Application tracker state machine, Gmail integration with email classification.
 ### Phase 6: Dashboard ✅
 FastAPI REST API (10 endpoints), FastHTML frontend (4 pages, PicoCSS + HTMX).
 
-### Phase 7: Cloud Deployment ⬚
-GCP Cloud Functions, Cloud Scheduler, Cloud Run, Cloud SQL PostgreSQL, Secret Manager. Not yet started.
+### Phase 7: Cloud Deployment 🔧
+GCP Cloud Run, Cloud SQL PostgreSQL, Secret Manager, Artifact Registry — Terraform IaC ready. GitHub Actions CI/CD workflows for Terraform and Docker. Cloud Scheduler for daily runs still planned.
 
 ---
 
