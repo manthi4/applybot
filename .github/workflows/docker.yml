@@ -1,0 +1,77 @@
+name: Docker
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag (defaults to short SHA)"
+        required: false
+        type: string
+
+  push:
+    branches: [main]
+
+concurrency:
+  group: docker
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '--docker')
+
+    permissions:
+      contents: read
+
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev" --quiet
+
+      - name: Resolve image tag
+        run: |
+          if [ -z "$IMAGE_TAG" ]; then
+            IMAGE_TAG="${GITHUB_SHA::7}"
+          fi
+          REGION="${{ vars.GCP_REGION || 'us-central1' }}"
+          REGISTRY="${REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/applybot"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
+          echo "REGISTRY=${REGISTRY}" >> "$GITHUB_ENV"
+
+      - name: Build Docker image
+        run: docker build -t applybot .
+
+      - name: Tag and push
+        run: |
+          docker tag applybot "${REGISTRY}/applybot:${IMAGE_TAG}"
+          docker tag applybot "${REGISTRY}/applybot:latest"
+          docker push "${REGISTRY}/applybot:${IMAGE_TAG}"
+          docker push "${REGISTRY}/applybot:latest"
+
+      - name: Write summary
+        run: |
+          {
+            echo "### Docker Image Published :whale:"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| **Registry** | \`${REGISTRY}\` |"
+            echo "| **Tag** | \`${IMAGE_TAG}\` |"
+            echo "| **Image** | \`${REGISTRY}/applybot:${IMAGE_TAG}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
