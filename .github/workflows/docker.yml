@@ -27,7 +27,7 @@ jobs:
       contents: read
 
     env:
-      IMAGE_TAG: ${{ inputs.image_tag || '' }}
+      IMAGE_TAG: ${{ github.event.inputs.image_tag || '' }}
 
     steps:
       - name: Checkout

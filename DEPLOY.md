@@ -162,6 +162,7 @@ Two workflows automate Terraform and Docker deployments.
 2. **Create a dedicated CI service account** with minimal permissions:
 
    ```bash
+   PROJECT_ID="your-gcp-project-id"
    gcloud iam service-accounts create applybot-ci --display-name="ApplyBot CI"
    for role in \
      roles/artifactregistry.writer \
@@ -170,12 +171,12 @@ Two workflows automate Terraform and Docker deployments.
      roles/secretmanager.admin \
      roles/storage.admin \
      roles/iam.serviceAccountUser; do
-     gcloud projects add-iam-policy-binding applybot-prod \
-       --member="serviceAccount:applybot-ci@applybot-prod.iam.gserviceaccount.com" \
+     gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+       --member="serviceAccount:applybot-ci@${PROJECT_ID}.iam.gserviceaccount.com" \
        --role="$role"
    done
    gcloud iam service-accounts keys create ci-key.json \
-     --iam-account=applybot-ci@applybot-prod.iam.gserviceaccount.com
+     --iam-account="applybot-ci@${PROJECT_ID}.iam.gserviceaccount.com"
    ```
 
 3. **Configure GitHub Secrets** in your repo settings:
