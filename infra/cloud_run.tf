@@ -23,6 +23,12 @@ locals {
   database_url         = "postgresql+psycopg://applybot:${var.db_password}@/applybot?host=/cloudsql/${local.cloud_sql_connection}"
 }
 
+resource "null_resource" "image_tag_tracker" {
+  triggers = {
+    image_tag = var.image_tag
+  }
+}
+
 resource "google_cloud_run_v2_service" "applybot" {
   name     = "applybot"
   location = var.region
@@ -113,7 +119,12 @@ resource "google_cloud_run_v2_service" "applybot" {
     google_project_service.services,
     google_project_iam_member.cloud_run_sql,
     google_project_iam_member.cloud_run_secrets,
+    null_resource.image_tag_tracker,
   ]
+
+  lifecycle {
+    replace_triggered_by = [null_resource.image_tag_tracker]
+  }
 }
 
 # Allow unauthenticated access (public dashboard)
