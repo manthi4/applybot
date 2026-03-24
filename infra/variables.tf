@@ -27,3 +27,9 @@ variable "image_tag" {
   type        = string
   default     = "latest"
 }
+
+variable "discovery_schedule" {
+  description = "Cron schedule for running job discovery (Cloud Scheduler)"
+  type        = string
+  default     = "0 8 * * *"
+}

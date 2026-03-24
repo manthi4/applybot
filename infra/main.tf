@@ -32,6 +32,8 @@ resource "google_project_service" "services" {
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
     "cloudbuild.googleapis.com",
+    "cloudfunctions.googleapis.com",
+    "cloudscheduler.googleapis.com",
   ])
 
   project = var.project_id

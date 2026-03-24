@@ -29,9 +29,9 @@ All modules are **implemented and importable**. No LLM-calling code has been tes
 | Gmail Integration | Email scanning + Claude classification → status updates |
 | FastAPI Backend | REST endpoints for jobs, applications, profile, summary |
 | FastHTML Frontend | Overview, Job Queue, Applications, Profile pages (PicoCSS + HTMX) |
-| CLI | `init-db`, `serve`, `bootstrap-profile` commands via Click |
+| CLI | `init-db`, `serve`, `bootstrap-profile`, `run-discovery` commands via Click |
 | Alembic Migrations | Initial migration created and stamped |
-| Deployment | Dockerfile, Terraform (GCP Cloud Run + Cloud SQL + Artifact Registry + Secrets), health check |
+| Deployment | Dockerfile, Terraform (GCP Cloud Run + Cloud SQL + Cloud Functions + Cloud Scheduler + Artifact Registry + Secrets), health check |
 
 ### Tests — 29/29 passing
 
@@ -61,7 +61,7 @@ All modules are **implemented and importable**. No LLM-calling code has been tes
 
 ### Future
 
-11. GCP deployment — ✅ Terraform config created. See DEPLOY.md for setup instructions. Cloud Scheduler for automated daily runs still planned.
+11. GCP deployment — ✅ Terraform config created. See DEPLOY.md for setup instructions. Cloud Functions Gen 2 + Cloud Scheduler for automated daily discovery runs configured.
 12. Workday scraper
 13. Auto-submission (form filling)
 
