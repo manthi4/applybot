@@ -146,7 +146,73 @@ docker run -p 8000:8000 \
   applybot
 ```
 
-## 9. Tear Down
+## 9. CI/CD with GitHub Actions
+
+Two workflows automate Terraform and Docker deployments.
+
+### Prerequisites
+
+1. **Create a GCS bucket for Terraform remote state:**
+
+   ```bash
+   gsutil mb -l us-central1 gs://applybot-tfstate
+   gsutil versioning set on gs://applybot-tfstate
+   ```
+
+2. **Create a dedicated CI service account** with minimal permissions:
+
+   ```bash
+   PROJECT_ID="your-gcp-project-id"
+   gcloud iam service-accounts create applybot-ci --display-name="ApplyBot CI"
+   for role in \
+     roles/artifactregistry.writer \
+     roles/run.admin \
+     roles/cloudsql.admin \
+     roles/secretmanager.admin \
+     roles/storage.admin \
+     roles/iam.serviceAccountUser; do
+     gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+       --member="serviceAccount:applybot-ci@${PROJECT_ID}.iam.gserviceaccount.com" \
+       --role="$role"
+   done
+   gcloud iam service-accounts keys create ci-key.json \
+     --iam-account="applybot-ci@${PROJECT_ID}.iam.gserviceaccount.com"
+   ```
+
+3. **Configure GitHub Secrets** in your repo settings:
+
+   | Secret | Description |
+   |--------|-------------|
+   | `GCP_SA_KEY` | Contents of `ci-key.json` |
+   | `GCP_PROJECT_ID` | GCP project ID (e.g. `applybot-prod`) |
+   | `TF_VAR_DB_PASSWORD` | Cloud SQL database password |
+   | `TF_VAR_ANTHROPIC_API_KEY` | Anthropic API key |
+   | `TF_VAR_SERPAPI_KEY` | SerpAPI key (optional) |
+
+4. **Configure GitHub Variables** (optional overrides):
+
+   | Variable | Default | Description |
+   |----------|---------|-------------|
+   | `GCP_REGION` | `us-central1` | GCP region |
+   | `IMAGE_TAG` | `latest` | Default image tag for Terraform |
+
+### Usage
+
+```bash
+# Terraform — manual triggers
+gh workflow run terraform.yml                    # plan + apply
+gh workflow run terraform.yml -f action=plan     # plan only
+
+# Docker — manual triggers
+gh workflow run docker.yml                       # tag = short SHA
+gh workflow run docker.yml -f image_tag=v2       # custom tag
+
+# Commit-message triggers (push to main)
+git commit -m "update infra --tf-apply"          # runs terraform apply
+git commit -m "fix bug --docker"                 # builds & pushes Docker image
+```
+
+## 10. Tear Down
 
 ```bash
 cd infra

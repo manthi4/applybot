@@ -6,6 +6,14 @@ terraform {
       version = "~> 6.0"
     }
   }
+
+  # Remote state in GCS — create the bucket before first `terraform init`:
+  #   gsutil mb -l us-central1 gs://<project_id>-tfstate
+  #   gsutil versioning set on gs://<project_id>-tfstate
+  backend "gcs" {
+    bucket = "applybot-tfstate"
+    prefix = "terraform/state"
+  }
 }
 
 provider "google" {
