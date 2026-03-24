@@ -11,6 +11,10 @@ on:
         options:
           - plan
           - apply
+      image_tag:
+        description: "Docker image tag to deploy (defaults to current commit SHA)"
+        required: false
+        type: string
 
   push:
     branches: [main]
@@ -25,7 +29,7 @@ env:
   TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
   TF_VAR_anthropic_api_key: ${{ secrets.TF_VAR_ANTHROPIC_API_KEY }}
   TF_VAR_serpapi_key: ${{ secrets.TF_VAR_SERPAPI_KEY }}
-  TF_VAR_image_tag: ${{ vars.IMAGE_TAG || 'latest' }}
+  TF_VAR_image_tag: ${{ github.event.inputs.image_tag || github.sha }}
 
 jobs:
   terraform:

@@ -61,8 +61,10 @@ jobs:
         run: |
           docker tag applybot "${REGISTRY}/applybot:${IMAGE_TAG}"
           docker tag applybot "${REGISTRY}/applybot:latest"
+          docker tag applybot "${REGISTRY}/applybot:${GITHUB_SHA}"
           docker push "${REGISTRY}/applybot:${IMAGE_TAG}"
           docker push "${REGISTRY}/applybot:latest"
+          docker push "${REGISTRY}/applybot:${GITHUB_SHA}"
 
       - name: Write summary
         run: |
