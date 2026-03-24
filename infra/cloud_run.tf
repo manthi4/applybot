@@ -66,12 +66,15 @@ resource "google_cloud_run_v2_service" "applybot" {
         }
       }
 
-      env {
-        name = "SERPAPI_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.serpapi_key.secret_id
-            version = "latest"
+      dynamic "env" {
+        for_each = var.serpapi_key != "" ? [1] : []
+        content {
+          name = "SERPAPI_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.serpapi_key.secret_id
+              version = "latest"
+            }
           }
         }
       }

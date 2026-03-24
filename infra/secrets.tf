@@ -24,6 +24,7 @@ resource "google_secret_manager_secret" "serpapi_key" {
 }
 
 resource "google_secret_manager_secret_version" "serpapi_key" {
+  count       = var.serpapi_key != "" ? 1 : 0
   secret      = google_secret_manager_secret.serpapi_key.id
   secret_data = var.serpapi_key
 }
