@@ -33,14 +33,34 @@ class Job(Base):
     location: Mapped[str] = mapped_column(String(300), default="")
     description: Mapped[str] = mapped_column(Text, default="")
     url: Mapped[str] = mapped_column(String(2000), unique=True)
-    source: Mapped[JobSource] = mapped_column(Enum(JobSource))
+    source: Mapped[JobSource] = mapped_column(
+        Enum(
+            "serpapi",
+            "greenhouse",
+            "lever",
+            "eu_remote_jobs",
+            "manual",
+            name="jobsource",
+        )
+    )
     posted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     discovered_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     relevance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     relevance_reasoning: Mapped[str] = mapped_column(Text, default="")
-    status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.NEW)
+    status: Mapped[JobStatus] = mapped_column(
+        Enum(
+            "new",
+            "reviewing",
+            "approved",
+            "skipped",
+            "applied",
+            "rejected",
+            name="jobstatus",
+        ),
+        default=JobStatus.NEW,
+    )
 
     def __repr__(self) -> str:
         return f"<Job {self.id}: {self.title} @ {self.company}>"
