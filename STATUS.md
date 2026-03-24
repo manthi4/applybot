@@ -2,7 +2,7 @@
 
 > See [README.md](README.md) for project overview, architecture, tech stack, and setup instructions.
 
-**Last updated:** March 19, 2026
+**Last updated:** March 24, 2026
 
 ---
 
@@ -28,7 +28,10 @@ All modules are **implemented and importable**. No LLM-calling code has been tes
 | Tracker | State machine with validated transitions |
 | Gmail Integration | Email scanning + Claude classification → status updates |
 | FastAPI Backend | REST endpoints for jobs, applications, profile, summary |
-| Streamlit Frontend | Overview, Job Queue, Applications, Profile pages |
+| FastHTML Frontend | Overview, Job Queue, Applications, Profile pages (PicoCSS + HTMX) |
+| CLI | `init-db`, `serve`, `bootstrap-profile` commands via Click |
+| Alembic Migrations | Initial migration created and stamped |
+| Deployment | Dockerfile, Terraform (GCP Cloud Run + Cloud SQL + Artifact Registry + Secrets), health check |
 
 ### Tests — 29/29 passing
 
@@ -42,8 +45,8 @@ All modules are **implemented and importable**. No LLM-calling code has been tes
 
 ### MVP blockers
 
-1. **CLI entrypoints** — No way to run anything. Need `discover`, `prepare`, `serve` commands.
-2. **Profile bootstrap flow** — No CLI to import resume .docx, extract profile, fill gaps interactively.
+1. **CLI entrypoints** — ✅ Done. `init-db`, `serve`, `bootstrap-profile` commands.
+2. **Profile bootstrap flow** — ✅ Done. `applybot bootstrap-profile resume.docx` parses and stores profile.
 3. **End-to-end integration test** — No LLM-calling code tested with real API keys.
 4. **Live scraper testing** — All scrapers written against docs only. EuRemoteJobs CSS selectors likely need tuning.
 5. **Company target lists** — Greenhouse/Lever scrapers need curated robotics/ML company slugs.
@@ -53,12 +56,12 @@ All modules are **implemented and importable**. No LLM-calling code has been tes
 
 7. **Error handling & retries** — LLM calls can fail or return malformed JSON.
 8. **More test coverage** — No tests for: scrapers (mock HTTP), ranker (mock LLM), resume parsing, API endpoints.
-9. **Alembic migrations** — Currently using `init_db()` directly. Need proper migration files for production.
+9. **Alembic migrations** — ✅ Done. Initial migration created.
 10. **Cost tracking** — No visibility into LLM API costs per run.
 
 ### Future
 
-11. GCP deployment (Cloud Functions, Cloud Scheduler, Cloud Run)
+11. GCP deployment — ✅ Terraform config created. See DEPLOY.md for setup instructions. Cloud Scheduler for automated daily runs still planned.
 12. Workday scraper
 13. Auto-submission (form filling)
 
@@ -66,11 +69,9 @@ All modules are **implemented and importable**. No LLM-calling code has been tes
 
 ## Next Steps (priority order)
 
-1. Create CLI entrypoints
-2. Set up `.env` with API keys (Anthropic, SerpAPI)
-3. Import resume and bootstrap profile
-4. Test discovery pipeline end-to-end with live APIs
-5. Curate company target lists for Greenhouse/Lever
-6. Test application preparation on a real job
-7. Add mock-based tests for scrapers, ranker, API endpoints
-8. Deploy to GCP
+1. Set up `.env` with API keys (Anthropic, SerpAPI)
+2. Test discovery pipeline end-to-end with live APIs
+3. Curate company target lists for Greenhouse/Lever
+4. Test application preparation on a real job
+5. Add mock-based tests for scrapers, ranker, API endpoints
+6. Deploy to GCP

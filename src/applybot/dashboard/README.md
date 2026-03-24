@@ -1,63 +1,134 @@
 # Dashboard
 
-Central web interface for monitoring and controlling ApplyBot. Consists of a FastAPI REST backend and a Streamlit frontend.
+Central web interface for monitoring and controlling ApplyBot. Two components:
+
+1. **FastHTML frontend** (`frontend.py`) — Full dashboard UI with PicoCSS styling, HTMX interactivity, and a dark slate-blue/red theme.
+2. **FastAPI REST API** (`api.py`) — Standalone REST API for programmatic access (used by external tools, not by the frontend).
 
 ## Files
 
-- **api.py** — FastAPI application with REST endpoints
-- **frontend.py** — Streamlit multi-page app
+```
+dashboard/
+├── frontend.py       # App setup, route registration, entrypoint
+├── theme.py          # Dark slate-blue + slate-red PicoCSS theme overrides
+├── components.py     # Reusable UI components (nav, page, cards, forms, badges)
+├── pages/
+│   ├── __init__.py
+│   ├── overview.py   # Overview page — stats cards and pipeline progress
+│   ├── jobs.py       # Job queue — list, filter, approve, skip
+│   ├── apps.py       # Applications — list, filter, approve, draft
+│   └── profile.py    # Profile — view and edit user profile
+├── api.py            # FastAPI REST API (10 endpoints)
+└── README.md
+```
+
+## Architecture
+
+### Frontend (FastHTML)
+
+The frontend uses a modular architecture:
+
+- **`theme.py`** — CSS custom properties overriding PicoCSS defaults. Dark slate-blue backgrounds (#0f172a, #1e293b), slate-red accents (#dc2626), and colored status badges. Exports `theme_headers` tuple for `fast_app(hdrs=...)`.
+
+- **`components.py`** — Reusable building blocks:
+  - Layout: `nav()`, `page()`, `alert()`
+  - Data display: `stat_card()`, `progress_table()`, `status_badge()`
+  - Forms: `filter_form()`
+  - Cards: `detail_card()`, `action_buttons()`, `confirmed_card()`, `collapsible_text()`
+
+- **`pages/`** — Each page module exports a `register(rt)` function that decorates route handlers onto the FastHTML route table.
+
+- **Health check** — `GET /healthz` returns plain text `ok`. Used by Cloud Run startup and liveness probes.
+
+- **`frontend.py`** — Coordinator: creates the `fast_app`, applies the theme, calls `register(rt)` for each page module, and provides the `main()` entrypoint.
+
+### Pages
+
+1. **Overview** (`/`) — Stats cards, pipeline progress bars, application status breakdown
+2. **Job Queue** (`/jobs`) — Filterable job list with HTMX-powered approve/skip actions
+3. **Applications** (`/apps`) — Applications by status with cover letter, answers, and review actions
+4. **Profile** (`/profile`) — Name/email/summary editor + full profile JSON display
+
+The frontend queries the database directly using `get_session()` from `models.base` — no HTTP calls to the REST API. Interactive actions (approve, skip, status changes) use HTMX partial page swaps.
+
+### Running the Dashboard
+
+```bash
+applybot serve
+applybot serve --host 0.0.0.0 --port 8080 --reload
+
+# Or directly:
+python -m applybot serve
+```
 
 ## REST API
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/jobs` | List jobs (filter: `status`, `min_score`; `limit` ≤ 500) |
+| GET | `/jobs` | List jobs (filter: `status`, `min_score`; `limit` <= 500) |
 | GET | `/jobs/{job_id}` | Job details |
 | POST | `/jobs/{job_id}/approve` | Mark job as APPROVED |
 | POST | `/jobs/{job_id}/skip` | Mark job as SKIPPED |
-| GET | `/applications` | List applications (filter: `status`; `limit` ≤ 500) |
+| GET | `/applications` | List applications (filter: `status`; `limit` <= 500) |
 | GET | `/applications/{app_id}` | Application details |
 | POST | `/applications/{app_id}/review` | Update application status (body: `{"action": "approve"}`) |
 | GET | `/profile` | Current user profile |
 | PUT | `/profile` | Update profile fields |
 | GET | `/dashboard/summary` | Counts by status for jobs and applications |
 
-### Response Models
-
-- `JobOut` — job fields + relevance_score + status
-- `ApplicationOut` — application fields + nested job + status history
-- `ProfileOut` — profile fields
-- `DashboardSummary` — `{jobs_by_status: {...}, applications_by_status: {...}}`
-
 ### Running the API
 
-```python
-import uvicorn
-from applybot.dashboard.api import app
-
-uvicorn.run(app, host="0.0.0.0", port=8000)
+```bash
+applybot serve-api
+applybot serve-api --host 0.0.0.0 --port 8001 --reload
 ```
 
-## Streamlit Frontend
-
-Pages:
-1. **Overview** — Stats cards, pipeline visualization, application status charts
-2. **Job Queue** — Filterable job list with approve/skip actions
-3. **Applications** — Applications by status with cover letter, answers, and review actions
-4. **Profile** — Name/email/summary editor + full profile data export
-
-The frontend communicates with the FastAPI backend via HTTP (`httpx`, 20s timeout).
-
-### Running the Frontend
+## CLI
 
 ```bash
-streamlit run src/applybot/dashboard/frontend.py
+# Start dashboard (FastHTML, default port 8000)
+applybot serve
+
+# Start REST API only (FastAPI, default port 8001)
+applybot serve-api
 ```
 
 ## Boundaries
 
-- **Depends on**: `models` (all ORM models for DB queries), `config` (database URL)
-- **Does not depend on**: LLM, Discovery, Application, Tracking, or Profile *directly* — reads/writes DB only
-- **Used by**: End users via browser, potentially other services via REST API
-- The API is read-heavy; write operations are limited to status changes and profile updates
-- The frontend is a thin UI layer — all business logic lives in the API and underlying modules
+- **Depends on**: `models` (ORM), `config` (database URL), `tracking` (status transitions)
+- **Does not depend on**: LLM, Discovery, Application, or Profile modules directly
+- **Used by**: End users via browser (frontend), other services via REST API
+- The frontend accesses the database directly; the REST API is an independent interface
+
+
+## Cloud Deployment
+
+### Dashboard → Cloud Run
+
+The FastHTML + FastAPI app (`applybot serve`) is hosted on **GCP Cloud Run**:
+- Build a Docker image from the project root and push to Artifact Registry
+- Deploy as a Cloud Run service with:
+  - `DATABASE_URL` and other secrets injected from **GCP Secret Manager**
+  - Cloud SQL instance connection via the Cloud SQL Python Connector (keep default SQLAlchemy connection pool — Cloud Run is long-running)
+- Expose on HTTPS via the Cloud Run-managed URL
+
+### Cloud Functions → Database
+
+Discovery, application, and tracking Cloud Functions write to the same Cloud SQL database. Use **NullPool** in Cloud Function entry points to avoid connection exhaustion across short-lived function invocations:
+
+```python
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
+
+engine = create_engine(DATABASE_URL, poolclass=NullPool)
+```
+
+The `DATABASE_URL` env var (sourced from Secret Manager) is the only config change needed — existing SQLAlchemy models work without modification.
+
+### Secrets
+
+All sensitive config is stored in GCP Secret Manager and mounted as environment variables in both Cloud Run and Cloud Functions:
+- `ANTHROPIC_API_KEY`
+- `SERPAPI_KEY`
+- `DATABASE_URL`
+- `GOOGLE_APPLICATION_CREDENTIALS` (Gmail OAuth)

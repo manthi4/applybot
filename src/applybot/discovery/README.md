@@ -84,3 +84,22 @@ ranked: list[tuple[RawJob, int, str]] = rank_jobs(jobs, profile)
 - Scrapers are isolated from each other — one scraper failing doesn't block others
 - The orchestrator is the only component that writes to the database; individual scrapers return `RawJob` dataclasses
 - Greenhouse/Lever scrapers require curated company slug lists (currently empty — needs population)
+
+## Tests
+
+Tests live in `src/applybot/discovery/tests/` alongside the component code.
+
+Run only discovery tests:
+
+```bash
+pytest src/applybot/discovery/tests/ -v
+```
+
+| File | Covers |
+|---|---|
+| `conftest.py` | Shared fixtures (`make_raw_job`, `mock_profile`) |
+| `test_deduplicator.py` | `deduplicate()`, `_normalize_url()`, `_build_key()` |
+| `test_query_builder.py` | `build_search_queries()` — LLM mocking + fallback |
+| `test_ranker.py` | `rank_jobs()`, `_score_batch()`, `_build_profile_summary()` |
+| `test_scrapers.py` | `BaseScraper` ABC, SerpAPI, Greenhouse, Lever scrapers |
+| `test_orchestrator.py` | `run_discovery()` pipeline, `_map_source()`, `_run_scraper()` |

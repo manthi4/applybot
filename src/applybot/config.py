@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Google / Gmail
     google_application_credentials: str = ""
 
+    # Server
+    port: int = 8000
+
     # Discovery
     discovery_relevance_threshold: int = 50
     discovery_max_jobs_per_run: int = 100

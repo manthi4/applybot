@@ -38,6 +38,16 @@ output: Path = generate_resume(data, template_path, output_path)
 # Creates a .docx preserving template formatting with tailored content
 ```
 
+### CLI Bootstrap
+
+```bash
+# Import a .docx resume and populate the database profile
+applybot bootstrap-profile path/to/resume.docx
+applybot bootstrap-profile resume.docx --name "Jane Doe" --email jane@example.com
+```
+
+Parses the resume, extracts name/summary/skills/experiences/education sections, and stores them in the database via ProfileManager.
+
 ## Boundaries
 
 - **Depends on**: `models` (UserProfile ORM), `config` (database URL)

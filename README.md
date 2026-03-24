@@ -1,6 +1,6 @@
 # ApplyBot
 
-A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, PostgreSQL for persistence, paid aggregator APIs for scraping, Anthropic SDK for AI, and a FastAPI + Streamlit dashboard.
+A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, PostgreSQL for persistence, paid aggregator APIs for scraping, Anthropic SDK for AI, and a FastHTML + FastAPI dashboard.
 
 ---
 
@@ -20,7 +20,7 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 2. **Discovery** — Searches multiple job boards daily using LLM-generated queries, deduplicates results with fuzzy matching, and uses Claude to rank jobs by relevance to your profile (0-100 score with reasoning).
 3. **Application** — For each approved job, tailors your resume (rephrase/reorder only — never fabricate), drafts answers to common application questions, generates a cover letter, and flags any profile gaps that need human input. Creates an Application record for review.
 4. **Tracking** — Manages application lifecycle through a validated state machine (DRAFT → READY_FOR_REVIEW → APPROVED → SUBMITTED → RECEIVED → INTERVIEW/OFFER/REJECTED). Scans Gmail to auto-detect status updates from applied-to companies.
-5. **Dashboard** — FastAPI REST API + Streamlit UI for reviewing job queue, managing applications, editing profile, and viewing pipeline statistics.
+5. **Dashboard** — FastHTML UI + FastAPI REST API for reviewing job queue, managing applications, editing profile, and viewing pipeline statistics.
 6. **Scheduler** — GCP Cloud Functions triggered by Cloud Scheduler for automated daily execution.
 
 **Human-in-the-loop**: The agent prepares everything, but never submits without explicit approval. Safety guardrail: the agent never submits without explicit approval.
@@ -33,9 +33,9 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 |---|---|---|
 | Language | Python 3.12+ | black/ruff/mypy configured |
 | LLM | Anthropic Claude (direct SDK) | Sonnet for cost-efficient tasks, Opus for complex reasoning; no LangChain |
-| Database | SQLAlchemy + Alembic | SQLite for dev, PostgreSQL (Supabase free tier) for prod |
+| Database | SQLAlchemy + Alembic | SQLite for dev, Cloud SQL PostgreSQL for prod |
 | API | FastAPI | Internal API + dashboard backend; auto-generated OpenAPI spec |
-| Frontend | Streamlit | Dashboard MVP; Python-native, swappable later |
+| Frontend | FastHTML + PicoCSS + HTMX | Lightweight Python-native UI; no JS build step |
 | Job Scraping | SerpAPI, Greenhouse API, Lever API, lxml | Paid aggregator + free public APIs |
 | Resume | python-docx | Parse and generate .docx preserving formatting |
 | Deduplication | rapidfuzz | Fuzzy token_sort_ratio matching (threshold 85) |
@@ -64,7 +64,7 @@ applybot/
 │   │   └── scrapers/       # Pluggable scraper implementations
 │   ├── application/        # Resume tailoring + Q&A + cover letters
 │   ├── tracking/           # State machine + Gmail integration
-│   └── dashboard/          # FastAPI REST API + Streamlit UI
+│   └── dashboard/          # FastHTML UI + FastAPI REST API
 ├── scheduler/              # GCP Cloud Function entry points (planned)
 └── tests/                  # pytest suite
 ```
@@ -79,7 +79,7 @@ Each component under `src/applybot/` has its own README describing its purpose, 
 
 ```
 ┌─────────────────────────────────────────────┐
-│       Dashboard (FastAPI + Streamlit)        │
+│       Dashboard (FastHTML + FastAPI)          │
 │  REST API for jobs, apps, profile, summary   │
 └──────────────┬──────────────────────────────┘
                │
@@ -287,12 +287,11 @@ Every transition creates an `ApplicationStatusUpdate` audit record with source (
 
 OpenAPI spec is auto-generated — other modules can use this API programmatically.
 
-**Streamlit Frontend** — Pages:
-- **Dashboard Overview** — Stats cards, recent activity, pipeline funnel chart
-- **Job Queue** — Table of discovered jobs with relevance scores, approve/skip actions
-- **Application Review** — Side-by-side view (job description | tailored resume + answers), approve/reject
-- **Profile Editor** — Name/email/summary form + full profile data export
-- **Settings** — Configuration management
+**FastHTML Frontend** — Pages:
+- **Overview** (`/`) — Stats cards, pipeline progress bars, application status breakdown
+- **Job Queue** (`/jobs`) — Filterable job list with HTMX-powered approve/skip actions
+- **Applications** (`/apps`) — Applications by status with cover letter, answers, review actions
+- **Profile** (`/profile`) — Name/email/summary form + full profile JSON display
 
 ---
 
@@ -347,12 +346,12 @@ pytest
 |---|---|
 | Direct Anthropic SDK (no LangChain) | Simpler, fewer deps, more debuggable |
 | SQLite dev / PostgreSQL prod | No DB server needed locally; swap via `DATABASE_URL` |
-| Supabase PostgreSQL for MVP | Free tier, easy setup, connection pooling included |
+| Cloud SQL PostgreSQL for prod | Same GCP network as Cloud Functions; Cloud SQL Python Connector avoids public internet exposure |
 | Human-in-the-loop | Agent never submits without explicit approval |
 | Resume honesty guardrail | Tailoring can only rephrase/reorder, not fabricate |
 | SerpAPI for LinkedIn/Indeed | Reliable aggregator API, avoids anti-bot issues |
 | Free APIs for Greenhouse/Lever | Public boards APIs, no auth needed |
-| Streamlit for dashboard MVP | Fast to build, Python-native, swappable later |
+| FastHTML for dashboard | Lightweight, Python-native, HTMX-powered, no pyarrow/heavy deps |
 | Lazy engine creation | Models import without requiring a DB connection |
 | Async scraper execution | All scrapers run in parallel; one failing doesn't block others |
 | Batch LLM ranking | Jobs sent in groups of 5 to reduce API calls and costs |
@@ -371,8 +370,8 @@ pytest
 
 ### Infrastructure
 
-- **Database**: Supabase PostgreSQL (free tier for MVP, Cloud SQL for production)
-- **Dashboard**: GCP Cloud Run (FastAPI) + Streamlit Community Cloud (or same Cloud Run)
+- **Database**: GCP Cloud SQL (PostgreSQL 15); Cloud Functions connect via Cloud SQL Python Connector with NullPool to avoid connection exhaustion
+- **Dashboard**: GCP Cloud Run (FastHTML + FastAPI)
 - **Secrets**: GCP Secret Manager for API keys
 - **Auth**: Service account with minimal permissions
 - **Scheduling**: Cloud Scheduler cron jobs
@@ -384,7 +383,7 @@ pytest
 - **SerpAPI**: ~$50/month for 5,000 searches
 - **Claude API**: Costs depend on usage; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
 - **Greenhouse/Lever APIs**: Free (public)
-- **Supabase**: Free tier (500MB, 2 compute units) sufficient for MVP
+- **Cloud SQL**: `db-f1-micro` instance sufficient for MVP; scale up as needed
 - **GCP Cloud Functions**: Free tier covers light usage
 
 Cost tracking per pipeline run is planned but not yet implemented.
@@ -426,10 +425,10 @@ Resume tailoring agent (with honesty guardrail), question answerer, cover letter
 Application tracker state machine, Gmail integration with email classification.
 
 ### Phase 6: Dashboard ✅
-FastAPI REST API (10 endpoints), Streamlit frontend (4 pages).
+FastAPI REST API (10 endpoints), FastHTML frontend (4 pages, PicoCSS + HTMX).
 
 ### Phase 7: Cloud Deployment ⬚
-GCP Cloud Functions, Cloud Scheduler, Cloud Run, Supabase PostgreSQL, Secret Manager. Not yet started.
+GCP Cloud Functions, Cloud Scheduler, Cloud Run, Cloud SQL PostgreSQL, Secret Manager. Not yet started.
 
 ---
 
