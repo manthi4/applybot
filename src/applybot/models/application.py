@@ -45,7 +45,19 @@ class Application(Base):
     cover_letter: Mapped[str] = mapped_column(Text, default="")
     answers: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     status: Mapped[ApplicationStatus] = mapped_column(
-        Enum(ApplicationStatus), default=ApplicationStatus.DRAFT
+        Enum(
+            "draft",
+            "ready_for_review",
+            "approved",
+            "submitted",
+            "received",
+            "interview",
+            "offer",
+            "rejected",
+            "withdrawn",
+            name="applicationstatus",
+        ),
+        default=ApplicationStatus.DRAFT,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
@@ -68,8 +80,23 @@ class ApplicationStatusUpdate(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     application_id: Mapped[int] = mapped_column(ForeignKey("applications.id"))
-    status: Mapped[ApplicationStatus] = mapped_column(Enum(ApplicationStatus))
-    source: Mapped[UpdateSource] = mapped_column(Enum(UpdateSource))
+    status: Mapped[ApplicationStatus] = mapped_column(
+        Enum(
+            "draft",
+            "ready_for_review",
+            "approved",
+            "submitted",
+            "received",
+            "interview",
+            "offer",
+            "rejected",
+            "withdrawn",
+            name="applicationstatus",
+        )
+    )
+    source: Mapped[UpdateSource] = mapped_column(
+        Enum("manual", "gmail", "system", name="updatesource")
+    )
     details: Mapped[str] = mapped_column(Text, default="")
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
