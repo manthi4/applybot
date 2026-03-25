@@ -1,6 +1,5 @@
 project_id        = "your-gcp-project-id"
 region            = "us-central1"
-db_password       = "change-me-to-a-strong-password"
 anthropic_api_key = "sk-ant-..."
 serpapi_key        = ""
 image_tag         = "latest"
