@@ -1,3 +1,5 @@
+# Cloud SQL instance — deletion_protection disabled so it can be removed.
+# TODO: Delete this entire file after the next successful terraform apply to destroy the instance.
 resource "google_sql_database_instance" "main" {
   name             = "applybot-db"
   database_version = "POSTGRES_15"
@@ -18,18 +20,7 @@ resource "google_sql_database_instance" "main" {
     }
   }
 
-  deletion_protection = true
+  deletion_protection = false
 
   depends_on = [google_project_service.services]
-}
-
-resource "google_sql_database" "applybot" {
-  name     = "applybot"
-  instance = google_sql_database_instance.main.name
-}
-
-resource "google_sql_user" "applybot" {
-  name     = "applybot"
-  instance = google_sql_database_instance.main.name
-  password = var.db_password
 }

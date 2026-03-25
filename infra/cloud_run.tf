@@ -3,11 +3,11 @@ resource "google_service_account" "cloud_run" {
   display_name = "ApplyBot Cloud Run"
 }
 
-# Cloud SQL Client role
-resource "google_project_iam_member" "cloud_run_sql" {
-  project = var.project_id
-  role    = "roles/cloudsql.client"
-  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+# GCS data bucket access (read/write for SQLite file)
+resource "google_storage_bucket_iam_member" "cloud_run_data" {
+  bucket = google_storage_bucket.data.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
 # Secret Manager accessor
@@ -18,9 +18,7 @@ resource "google_project_iam_member" "cloud_run_secrets" {
 }
 
 locals {
-  cloud_sql_connection = "${var.project_id}:${var.region}:${google_sql_database_instance.main.name}"
-  image_uri            = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.applybot.repository_id}/applybot:${var.image_tag}"
-  database_url         = "postgresql+psycopg://applybot:${var.db_password}@/applybot?host=/cloudsql/${local.cloud_sql_connection}"
+  image_uri = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.applybot.repository_id}/applybot:${var.image_tag}"
 }
 
 resource "null_resource" "image_tag_tracker" {
@@ -44,9 +42,10 @@ resource "google_cloud_run_v2_service" "applybot" {
     }
 
     volumes {
-      name = "cloudsql"
-      cloud_sql_instance {
-        instances = [local.cloud_sql_connection]
+      name = "gcs-data"
+      gcs {
+        bucket    = google_storage_bucket.data.name
+        read_only = false
       }
     }
 
@@ -59,7 +58,7 @@ resource "google_cloud_run_v2_service" "applybot" {
 
       env {
         name  = "DATABASE_URL"
-        value = local.database_url
+        value = "sqlite:////data/applybot.db"
       }
 
       env {
@@ -86,8 +85,8 @@ resource "google_cloud_run_v2_service" "applybot" {
       }
 
       volume_mounts {
-        name       = "cloudsql"
-        mount_path = "/cloudsql"
+        name       = "gcs-data"
+        mount_path = "/data"
       }
 
       startup_probe {
@@ -117,7 +116,7 @@ resource "google_cloud_run_v2_service" "applybot" {
 
   depends_on = [
     google_project_service.services,
-    google_project_iam_member.cloud_run_sql,
+    google_storage_bucket_iam_member.cloud_run_data,
     google_project_iam_member.cloud_run_secrets,
     null_resource.image_tag_tracker,
   ]

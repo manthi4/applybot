@@ -29,7 +29,7 @@ provider "google" {
 resource "google_project_service" "services" {
   for_each = toset([
     "run.googleapis.com",
-    "sqladmin.googleapis.com",
+    "storage.googleapis.com",
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
     "cloudbuild.googleapis.com",

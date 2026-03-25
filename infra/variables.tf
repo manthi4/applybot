@@ -9,12 +9,6 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "db_password" {
-  description = "Cloud SQL database password"
-  type        = string
-  sensitive   = true
-}
-
 variable "anthropic_api_key" {
   description = "Anthropic API key"
   type        = string

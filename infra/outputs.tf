@@ -3,9 +3,9 @@ output "dashboard_url" {
   value       = google_cloud_run_v2_service.applybot.uri
 }
 
-output "cloud_sql_connection_name" {
-  description = "Cloud SQL connection name for proxy"
-  value       = google_sql_database_instance.main.connection_name
+output "data_bucket" {
+  description = "GCS bucket used for SQLite database storage"
+  value       = google_storage_bucket.data.name
 }
 
 output "artifact_registry" {
