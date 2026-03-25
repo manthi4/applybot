@@ -49,3 +49,6 @@ Before every terminal command that involves `python`, `pip`, `pytest`, `alembic`
 3. Verify with `python -c "import sys; print(sys.prefix)"` — it must point to the `.venv` directory, not the system Python
 
 **Never run `pip install` without confirming the venv is active.**
+
+## Branches
+When the user asks you to fix a bug or implement a new feature, ask them if you should create a new branch for it. Create a new branch named `feat/description` or `fix/description` based on the type of change. For example, `feat/add-github-actions` or `fix/resume-parsing-bug`. This keeps the commit history organized and makes it clear what each branch is for.
