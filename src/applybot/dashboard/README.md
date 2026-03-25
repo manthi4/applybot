@@ -108,27 +108,14 @@ applybot serve-api
 The FastHTML + FastAPI app (`applybot serve`) is hosted on **GCP Cloud Run**:
 - Build a Docker image from the project root and push to Artifact Registry
 - Deploy as a Cloud Run service with:
-  - `DATABASE_URL` and other secrets injected from **GCP Secret Manager**
-  - Cloud SQL instance connection via the Cloud SQL Python Connector (keep default SQLAlchemy connection pool — Cloud Run is long-running)
+  - `DATABASE_URL=sqlite:////data/applybot.db` injected as an environment variable
+  - GCS bucket (`$project_id-applybot-data`) mounted at `/data` via Cloud Run's native FUSE volume — the SQLite file lives here and persists across deploys
+  - `max-instances=1` to prevent concurrent SQLite write contention
 - Expose on HTTPS via the Cloud Run-managed URL
-
-### Cloud Functions → Database
-
-Discovery, application, and tracking Cloud Functions write to the same Cloud SQL database. Use **NullPool** in Cloud Function entry points to avoid connection exhaustion across short-lived function invocations:
-
-```python
-from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool
-
-engine = create_engine(DATABASE_URL, poolclass=NullPool)
-```
-
-The `DATABASE_URL` env var (sourced from Secret Manager) is the only config change needed — existing SQLAlchemy models work without modification.
 
 ### Secrets
 
-All sensitive config is stored in GCP Secret Manager and mounted as environment variables in both Cloud Run and Cloud Functions:
+All sensitive config is stored in GCP Secret Manager and mounted as environment variables in Cloud Run:
 - `ANTHROPIC_API_KEY`
 - `SERPAPI_KEY`
-- `DATABASE_URL`
 - `GOOGLE_APPLICATION_CREDENTIALS` (Gmail OAuth)

@@ -1,6 +1,6 @@
 # ApplyBot
 
-A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, PostgreSQL for persistence, paid aggregator APIs for scraping, Anthropic SDK for AI, and a FastHTML + FastAPI dashboard.
+A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, SQLite on GCS for persistence, paid aggregator APIs for scraping, Anthropic SDK for AI, and a FastHTML + FastAPI dashboard.
 
 ---
 
@@ -33,7 +33,7 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 |---|---|---|
 | Language | Python 3.12+ | black/ruff/mypy configured |
 | LLM | Anthropic Claude (direct SDK) | Sonnet for cost-efficient tasks, Opus for complex reasoning; no LangChain |
-| Database | SQLAlchemy + Alembic | SQLite for dev, Cloud SQL PostgreSQL for prod |
+| Database | SQLAlchemy + Alembic | SQLite everywhere; GCS bucket FUSE-mounted at `/data` in prod |
 | API | FastAPI | Internal API + dashboard backend; auto-generated OpenAPI spec |
 | Frontend | FastHTML + PicoCSS + HTMX | Lightweight Python-native UI; no JS build step |
 | Job Scraping | SerpAPI, Greenhouse API, Lever API, lxml | Paid aggregator + free public APIs |
@@ -59,7 +59,7 @@ applybot/
 ├── .github/workflows/
 │   ├── terraform.yml       # Terraform plan/apply CI workflow
 │   └── docker.yml          # Docker build & push CI workflow
-├── infra/                  # Terraform IaC (GCP Cloud Run, Cloud SQL, etc.)
+├── infra/                  # Terraform IaC (GCP Cloud Run, GCS data bucket, etc.)
 ├── src/applybot/
 │   ├── config.py           # Pydantic Settings (env-based)
 │   ├── models/             # SQLAlchemy ORM (Job, Application, UserProfile)
@@ -350,8 +350,7 @@ pytest
 | Decision | Rationale |
 |---|---|
 | Direct Anthropic SDK (no LangChain) | Simpler, fewer deps, more debuggable |
-| SQLite dev / PostgreSQL prod | No DB server needed locally; swap via `DATABASE_URL` |
-| Cloud SQL PostgreSQL for prod | Same GCP network as Cloud Functions; Cloud SQL Python Connector avoids public internet exposure |
+| SQLite everywhere | No DB server to manage or pay for; GCS FUSE mount provides persistence in Cloud Run at ~$0.02/month |
 | Human-in-the-loop | Agent never submits without explicit approval |
 | Resume honesty guardrail | Tailoring can only rephrase/reorder, not fabricate |
 | SerpAPI for LinkedIn/Indeed | Reliable aggregator API, avoids anti-bot issues |
@@ -375,10 +374,10 @@ pytest
 
 ### Infrastructure
 
-- **Database**: GCP Cloud SQL (PostgreSQL 15); Cloud Functions connect via Cloud SQL Python Connector with NullPool to avoid connection exhaustion
-- **Dashboard**: GCP Cloud Run (FastHTML + FastAPI)
+- **Database**: SQLite file stored in a GCS bucket (`$project_id-applybot-data`), mounted at `/data` in Cloud Run via native FUSE volume. No DB server, no connection pool.
+- **Dashboard**: GCP Cloud Run (FastHTML + FastAPI), `max-instances=1` to prevent concurrent SQLite writers
 - **Secrets**: GCP Secret Manager for API keys
-- **Auth**: Service account with minimal permissions
+- **Auth**: Service account with minimal permissions (`storage.objectAdmin` on data bucket)
 - **Scheduling**: Cloud Scheduler cron jobs
 
 ### CI/CD (GitHub Actions)
@@ -408,7 +407,7 @@ git commit -m "update infra --tf-apply"
 git commit -m "fix bug --docker"
 ```
 
-**Required GitHub Secrets:** `GCP_SA_KEY`, `GCP_PROJECT_ID`, `TF_VAR_DB_PASSWORD`, `TF_VAR_ANTHROPIC_API_KEY`, `TF_VAR_SERPAPI_KEY`.
+**Required GitHub Secrets:** `GCP_SA_KEY`, `GCP_PROJECT_ID`, `TF_VAR_ANTHROPIC_API_KEY`, `TF_VAR_SERPAPI_KEY`.
 **Optional GitHub Variables:** `GCP_REGION` (default: `us-central1`), `IMAGE_TAG` (default: `latest`).
 
 See [DEPLOY.md](DEPLOY.md) § "CI/CD with GitHub Actions" for full setup instructions (GCS bucket for Terraform state, CI service account creation, secrets configuration).
@@ -420,7 +419,7 @@ See [DEPLOY.md](DEPLOY.md) § "CI/CD with GitHub Actions" for full setup instruc
 - **SerpAPI**: ~$50/month for 5,000 searches
 - **Claude API**: Costs depend on usage; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
 - **Greenhouse/Lever APIs**: Free (public)
-- **Cloud SQL**: `db-f1-micro` instance sufficient for MVP; scale up as needed
+- **GCS data bucket**: SQLite file storage — ~$0.02/month (essentially free)
 - **GCP Cloud Functions**: Free tier covers light usage
 
 Cost tracking per pipeline run is planned but not yet implemented.
