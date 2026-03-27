@@ -93,24 +93,6 @@ resource "google_cloudfunctions2_function" "discovery" {
   ]
 }
 
-# --- Cloud Scheduler job ---
-resource "google_cloud_scheduler_job" "discovery" {
-  name      = "applybot-discovery"
-  schedule  = var.discovery_schedule
-  time_zone = "UTC"
-
-  http_target {
-    http_method = "POST"
-    uri         = google_cloudfunctions2_function.discovery.url
-
-    oidc_token {
-      service_account_email = google_service_account.cloud_run.email
-    }
-  }
-
-  depends_on = [google_project_service.services]
-}
-
 # --- Allow the service account to invoke the function ---
 resource "google_cloudfunctions2_function_iam_member" "scheduler_invoker" {
   project        = var.project_id
@@ -118,11 +100,4 @@ resource "google_cloudfunctions2_function_iam_member" "scheduler_invoker" {
   cloud_function = google_cloudfunctions2_function.discovery.name
   role           = "roles/cloudfunctions.invoker"
   member         = "serviceAccount:${google_service_account.cloud_run.email}"
-}
-
-# --- Allow the service account to generate OIDC tokens for itself (for Scheduler) ---
-resource "google_service_account_iam_member" "scheduler_token_creator" {
-  service_account_id = google_service_account.cloud_run.name
-  role               = "roles/iam.serviceAccountTokenCreator"
-  member             = "serviceAccount:${google_service_account.cloud_run.email}"
 }
