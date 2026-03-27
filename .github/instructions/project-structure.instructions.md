@@ -12,12 +12,10 @@ applybot/
 ├── STATUS.md               # Current progress and next steps
 ├── core_idea.md            # Original project vision
 ├── pyproject.toml          # Dependencies and tool config (black, ruff, mypy)
-├── alembic.ini             # Alembic migration config
-├── alembic/                # Database migration scripts
-├── data/                   # Local data files (SQLite DB, resume, exports)
+├── data/                   # Local data files (resume, exports)
 ├── src/applybot/           # All application source code
 │   ├── config.py           # Pydantic Settings — environment-based configuration
-│   ├── models/             # SQLAlchemy ORM: Job, Application, UserProfile
+│   ├── models/             # Pydantic models + Firestore CRUD: Job, Application, UserProfile
 │   ├── llm/                # Anthropic Claude SDK wrapper
 │   ├── profile/            # Profile CRUD and .docx resume parsing/generation
 │   ├── discovery/          # Multi-source job scraping, dedup, and ranking
@@ -40,7 +38,7 @@ If you make changes to a component, update its README.md to reflect any new func
 ### Virtual Environment (CRITICAL)
 **ALWAYS verify the virtual environment is active before running ANY Python or pip command.** Installing packages into the system Python is destructive and unwanted.
 
-Before every terminal command that involves `python`, `pip`, `pytest`, `alembic`, `streamlit`, `uvicorn`, or any project tool:
+Before every terminal command that involves `python`, `pip`, `pytest`, `streamlit`, `uvicorn`, or any project tool:
 1. Check if the prompt shows `(.venv)` prefix
 2. If not, activate it first:
    - **Windows (PowerShell):** `& .\.venv\Scripts\Activate.ps1`

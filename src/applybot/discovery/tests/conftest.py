@@ -2,14 +2,27 @@
 
 from __future__ import annotations
 
-from datetime import date
-from typing import Any
-from unittest.mock import MagicMock
+import sys
+from unittest.mock import MagicMock as _MagicMock
 
-import pytest
+# Inject mock google.cloud.firestore_v1 into sys.modules so tests can run
+# without the real google-cloud-firestore package (e.g. Windows ARM64).
+_mock_base_query = _MagicMock()
+_mock_firestore_v1 = _MagicMock()
+_mock_firestore_v1.base_query = _mock_base_query
+sys.modules.setdefault("google", _MagicMock())
+sys.modules.setdefault("google.cloud", _MagicMock())
+sys.modules.setdefault("google.cloud.firestore_v1", _mock_firestore_v1)
+sys.modules.setdefault("google.cloud.firestore_v1.base_query", _mock_base_query)
 
-from applybot.discovery.scrapers.base import RawJob
-from applybot.models.profile import UserProfile
+from datetime import date  # noqa: E402
+from typing import Any  # noqa: E402
+from unittest.mock import MagicMock  # noqa: E402
+
+import pytest  # noqa: E402
+
+from applybot.discovery.scrapers.base import RawJob  # noqa: E402
+from applybot.models.profile import UserProfile  # noqa: E402
 
 
 def make_raw_job(

@@ -161,7 +161,7 @@ def filter_form(action: str, filters: list[dict[str, Any]]) -> Form:
 
 
 def detail_card(
-    id_prefix: str, id_val: int, summary_text: str, *content: object
+    id_prefix: str, id_val: str, summary_text: str, *content: object
 ) -> Article:
     """An expandable article card with a details/summary header."""
     return Article(
@@ -186,7 +186,7 @@ def action_buttons(*buttons: tuple[str, str, str, str]) -> Div:
 
 
 def confirmed_card(
-    id_prefix: str, id_val: int, title: str, status_text: str
+    id_prefix: str, id_val: str, title: str, status_text: str
 ) -> Article:
     """A compact card shown after an action (approve/skip/etc)."""
     return Article(

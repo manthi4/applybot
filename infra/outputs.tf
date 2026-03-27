@@ -4,7 +4,7 @@ output "dashboard_url" {
 }
 
 output "data_bucket" {
-  description = "GCS bucket used for SQLite database storage"
+  description = "GCS bucket used for file storage (resumes, exports)"
   value       = google_storage_bucket.data.name
 }
 

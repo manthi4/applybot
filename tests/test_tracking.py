@@ -1,17 +1,14 @@
 """Tests for the tracking module (state machine)."""
 
-import uuid
-
 import pytest
 
 from applybot.models.application import (
     Application,
     ApplicationStatus,
-    ApplicationStatusUpdate,
-    UpdateSource,
+    add_application,
+    get_status_updates,
 )
-from applybot.models.base import get_session, init_db
-from applybot.models.job import Job, JobSource
+from applybot.models.job import Job, JobSource, add_job
 from applybot.tracking.tracker import (
     InvalidTransitionError,
     get_applications,
@@ -20,38 +17,26 @@ from applybot.tracking.tracker import (
 )
 
 
-@pytest.fixture(autouse=True)
-def setup_db():
-    init_db()
-    yield
-    with get_session() as session:
-        session.query(ApplicationStatusUpdate).delete()
-        session.query(Application).delete()
-        session.query(Job).delete()
-        session.commit()
-
-
-def _create_application(status: ApplicationStatus = ApplicationStatus.DRAFT) -> int:
+def _create_application(status: ApplicationStatus = ApplicationStatus.DRAFT) -> str:
     """Helper to create a test application and return its ID."""
-    with get_session() as session:
-        job = Job(
-            title="Test Job",
-            company="Co",
-            url=f"https://example.com/job/{uuid.uuid4().hex}",
-            source=JobSource.MANUAL,
-        )
-        session.add(job)
-        session.commit()
+    job = Job(
+        title="Test Job",
+        company="Co",
+        url=f"https://example.com/job/track-{id(status)}-{status.value}",
+        source=JobSource.MANUAL,
+    )
+    job = add_job(job)
 
-        app = Application(job_id=job.id, status=status)
-        session.add(app)
-        session.commit()
-        return app.id
+    app = Application(job_id=job.id, status=status)
+    app = add_application(app)
+    return app.id
 
 
 class TestStatusTransitions:
     def test_valid_draft_to_ready(self):
         app_id = _create_application(ApplicationStatus.DRAFT)
+        from applybot.models.application import UpdateSource
+
         app = update_status(
             app_id, ApplicationStatus.READY_FOR_REVIEW, UpdateSource.SYSTEM
         )
@@ -70,6 +55,8 @@ class TestStatusTransitions:
 
     def test_valid_submitted_to_rejected(self):
         app_id = _create_application(ApplicationStatus.SUBMITTED)
+        from applybot.models.application import UpdateSource
+
         app = update_status(
             app_id, ApplicationStatus.REJECTED, UpdateSource.GMAIL, "Rejection email"
         )
@@ -97,23 +84,20 @@ class TestStatusTransitions:
 
     def test_nonexistent_application(self):
         with pytest.raises(ValueError, match="not found"):
-            update_status(99999, ApplicationStatus.APPROVED)
+            update_status("nonexistent_id", ApplicationStatus.APPROVED)
 
     def test_status_update_creates_record(self):
         app_id = _create_application(ApplicationStatus.DRAFT)
+        from applybot.models.application import UpdateSource
+
         update_status(
             app_id, ApplicationStatus.READY_FOR_REVIEW, UpdateSource.SYSTEM, "Test"
         )
 
-        with get_session() as session:
-            updates = (
-                session.query(ApplicationStatusUpdate)
-                .filter(ApplicationStatusUpdate.application_id == app_id)
-                .all()
-            )
-            assert len(updates) == 1
-            assert updates[0].status == ApplicationStatus.READY_FOR_REVIEW
-            assert updates[0].details == "Test"
+        updates = get_status_updates(app_id)
+        assert len(updates) == 1
+        assert updates[0].status == ApplicationStatus.READY_FOR_REVIEW
+        assert updates[0].details == "Test"
 
 
 class TestGetApplications:

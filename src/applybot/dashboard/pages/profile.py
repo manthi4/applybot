@@ -19,15 +19,13 @@ from fasthtml.common import (
 )
 
 from applybot.dashboard.components import page
-from applybot.models.base import get_session
-from applybot.models.profile import UserProfile
+from applybot.models.profile import UserProfile, get_profile, save_profile
 
 
 def register(rt: Any) -> None:
     @rt("/profile")
     def get() -> tuple[object, ...]:
-        with get_session() as session:
-            profile = session.query(UserProfile).first()
+        profile = get_profile()
 
         name_val = profile.name if profile else ""
         email_val = profile.email if profile else ""
@@ -67,13 +65,11 @@ def register(rt: Any) -> None:
 
     @rt("/profile")
     def post(name: str = "", email: str = "", summary: str = "") -> RedirectResponse:
-        with get_session() as session:
-            profile = session.query(UserProfile).first()
-            if profile is None:
-                profile = UserProfile(name=name, email=email)
-                session.add(profile)
-            profile.name = name
-            profile.email = email
-            profile.summary = summary
-            session.commit()
+        profile = get_profile()
+        if profile is None:
+            profile = UserProfile(name=name, email=email)
+        profile.name = name
+        profile.email = email
+        profile.summary = summary
+        save_profile(profile)
         return RedirectResponse("/profile", status_code=303)

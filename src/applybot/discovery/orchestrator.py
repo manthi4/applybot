@@ -17,8 +17,7 @@ from applybot.discovery.scrapers.euremotejobs import EuRemoteJobsScraper
 from applybot.discovery.scrapers.greenhouse import GreenhouseScraper
 from applybot.discovery.scrapers.lever import LeverScraper
 from applybot.discovery.scrapers.serpapi import SerpAPIScraper
-from applybot.models.base import get_session
-from applybot.models.job import Job, JobSource, JobStatus
+from applybot.models.job import Job, JobSource, JobStatus, add_jobs, get_all_job_urls
 from applybot.profile.manager import ProfileManager
 
 logger = logging.getLogger(__name__)
@@ -150,34 +149,33 @@ async def run_discovery(
 
 def _save_jobs(ranked: list[tuple[RawJob, int, str]]) -> int:
     """Save ranked jobs to the database, skipping existing URLs."""
-    new_count = 0
-    with get_session() as session:
-        existing_urls = {row[0] for row in session.query(Job.url).all()}
+    existing_urls = get_all_job_urls()
+    new_jobs: list[Job] = []
 
-        for raw_job, score, reasoning in ranked:
-            if raw_job.url in existing_urls:
-                continue
+    for raw_job, score, reasoning in ranked:
+        if raw_job.url in existing_urls:
+            continue
 
-            source = _map_source(raw_job.source)
-            job = Job(
-                title=raw_job.title,
-                company=raw_job.company,
-                location=raw_job.location,
-                description=raw_job.description,
-                url=raw_job.url,
-                source=source,
-                posted_date=raw_job.posted_date,
-                discovered_date=datetime.now(UTC),
-                relevance_score=score,
-                relevance_reasoning=reasoning,
-                status=JobStatus.NEW,
-            )
-            session.add(job)
-            existing_urls.add(raw_job.url)
-            new_count += 1
+        source = _map_source(raw_job.source)
+        job = Job(
+            title=raw_job.title,
+            company=raw_job.company,
+            location=raw_job.location,
+            description=raw_job.description,
+            url=raw_job.url,
+            source=source,
+            posted_date=raw_job.posted_date,
+            discovered_date=datetime.now(UTC),
+            relevance_score=score,
+            relevance_reasoning=reasoning,
+            status=JobStatus.NEW,
+        )
+        new_jobs.append(job)
+        existing_urls.add(raw_job.url)
 
-        session.commit()
-    return new_count
+    if new_jobs:
+        add_jobs(new_jobs)
+    return len(new_jobs)
 
 
 def _map_source(source_name: str) -> JobSource:

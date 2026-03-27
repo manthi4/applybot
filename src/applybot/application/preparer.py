@@ -10,9 +10,8 @@ from applybot.application.question_answerer import (
     generate_cover_letter,
 )
 from applybot.application.resume_tailor import tailor_resume
-from applybot.models.application import Application, ApplicationStatus
-from applybot.models.base import get_session
-from applybot.models.job import Job, JobStatus
+from applybot.models.application import Application, ApplicationStatus, add_application
+from applybot.models.job import Job, JobStatus, query_jobs, update_job
 from applybot.profile.manager import ProfileManager
 
 logger = logging.getLogger(__name__)
@@ -52,7 +51,7 @@ def prepare_application(
     except FileNotFoundError:
         logger.warning("No base resume found — skipping resume tailoring")
     except Exception:
-        logger.exception("Resume tailoring failed for job %d", job.id)
+        logger.exception("Resume tailoring failed for job %s", job.id)
 
     # 2. Answer questions
     answers, gaps = answer_questions(job, profile, custom_questions)
@@ -62,41 +61,31 @@ def prepare_application(
     cover_letter = generate_cover_letter(job, profile)
 
     # 4. Save to database
-    with get_session() as session:
-        application = Application(
-            job_id=job.id,
-            tailored_resume_path=resume_path,
-            cover_letter=cover_letter,
-            answers=answers,
-            status=ApplicationStatus.READY_FOR_REVIEW,
-        )
-        session.add(application)
-        session.commit()
-        session.refresh(application)
+    application = Application(
+        job_id=job.id,
+        tailored_resume_path=resume_path,
+        cover_letter=cover_letter,
+        answers=answers,
+        status=ApplicationStatus.READY_FOR_REVIEW,
+    )
+    application = add_application(application)
 
-        logger.info(
-            "Application prepared: id=%d for job %d (%s at %s), %d gaps",
-            application.id,
-            job.id,
-            job.title,
-            job.company,
-            len(all_gaps),
-        )
-        return application, all_gaps
+    logger.info(
+        "Application prepared: id=%s for job %s (%s at %s), %d gaps",
+        application.id,
+        job.id,
+        job.title,
+        job.company,
+        len(all_gaps),
+    )
+    return application, all_gaps
 
 
 def prepare_all_approved() -> list[tuple[Application, list[ProfileGap]]]:
-    """Prepare applications for all jobs with APPROVED status.
-
-    Returns:
-        List of (Application, gaps) tuples.
-    """
+    """Prepare applications for all jobs with APPROVED status."""
     results: list[tuple[Application, list[ProfileGap]]] = []
 
-    with get_session() as session:
-        approved_jobs = (
-            session.query(Job).filter(Job.status == JobStatus.APPROVED).all()
-        )
+    approved_jobs = query_jobs(status=JobStatus.APPROVED, limit=500)
 
     logger.info("Found %d approved jobs to prepare", len(approved_jobs))
 
@@ -104,16 +93,9 @@ def prepare_all_approved() -> list[tuple[Application, list[ProfileGap]]]:
         try:
             app, gaps = prepare_application(job)
             results.append((app, gaps))
-
-            # Update job status
-            with get_session() as session:
-                session.query(Job).filter(Job.id == job.id).update(
-                    {Job.status: JobStatus.REVIEWING}
-                )
-                session.commit()
-
+            update_job(job.id, status=JobStatus.REVIEWING)
         except Exception:
-            logger.exception("Failed to prepare application for job %d", job.id)
+            logger.exception("Failed to prepare application for job %s", job.id)
 
     logger.info("Prepared %d applications", len(results))
     return results

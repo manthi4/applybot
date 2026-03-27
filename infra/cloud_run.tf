@@ -3,11 +3,11 @@ resource "google_service_account" "cloud_run" {
   display_name = "ApplyBot Cloud Run"
 }
 
-# GCS data bucket access (read/write for SQLite file)
-resource "google_storage_bucket_iam_member" "cloud_run_data" {
-  bucket = google_storage_bucket.data.name
-  role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${google_service_account.cloud_run.email}"
+# Firestore access for Cloud Run
+resource "google_project_iam_member" "cloud_run_firestore" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
 # Secret Manager accessor
@@ -41,14 +41,6 @@ resource "google_cloud_run_v2_service" "applybot" {
       max_instance_count = 1
     }
 
-    volumes {
-      name = "gcs-data"
-      gcs {
-        bucket    = google_storage_bucket.data.name
-        read_only = false
-      }
-    }
-
     containers {
       image = local.image_uri
 
@@ -57,8 +49,8 @@ resource "google_cloud_run_v2_service" "applybot" {
       }
 
       env {
-        name  = "DATABASE_URL"
-        value = "sqlite:////data/applybot.db"
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
       }
 
       env {
@@ -82,11 +74,6 @@ resource "google_cloud_run_v2_service" "applybot" {
             }
           }
         }
-      }
-
-      volume_mounts {
-        name       = "gcs-data"
-        mount_path = "/data"
       }
 
       startup_probe {
@@ -116,7 +103,7 @@ resource "google_cloud_run_v2_service" "applybot" {
 
   depends_on = [
     google_project_service.services,
-    google_storage_bucket_iam_member.cloud_run_data,
+    google_project_iam_member.cloud_run_firestore,
     google_project_iam_member.cloud_run_secrets,
     null_resource.image_tag_tracker,
   ]

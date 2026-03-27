@@ -1,6 +1,6 @@
 # ApplyBot
 
-A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, SQLite on GCS for persistence, paid aggregator APIs for scraping, Anthropic SDK for AI, and a FastHTML + FastAPI dashboard.
+A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, Firestore for persistence, paid aggregator APIs for scraping, Anthropic SDK for AI, and a FastHTML + FastAPI dashboard.
 
 ---
 
@@ -33,7 +33,7 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 |---|---|---|
 | Language | Python 3.12+ | black/ruff/mypy configured |
 | LLM | Anthropic Claude (direct SDK) | Sonnet for cost-efficient tasks, Opus for complex reasoning; no LangChain |
-| Database | SQLAlchemy + Alembic | SQLite everywhere; GCS bucket FUSE-mounted at `/data` in prod |
+| Database | Google Cloud Firestore | Serverless NoSQL document database; schema-less, no migrations needed |
 | API | FastAPI | Internal API + dashboard backend; auto-generated OpenAPI spec |
 | Frontend | FastHTML + PicoCSS + HTMX | Lightweight Python-native UI; no JS build step |
 | Job Scraping | SerpAPI, Greenhouse API, Lever API, lxml | Paid aggregator + free public APIs |
@@ -52,17 +52,14 @@ applybot/
 ├── DEPLOY.md               # Full deployment guide (manual + CI/CD)
 ├── core_idea.md            # Original project vision
 ├── pyproject.toml          # Dependencies and tool config
-├── alembic.ini             # Alembic config
-├── alembic/                # Database migrations
-├── data/                   # Local data (resume, DB, exports)
-│   └── applybot.db
+├── data/                   # Local data (resume, exports)
 ├── .github/workflows/
 │   ├── terraform.yml       # Terraform plan/apply CI workflow
 │   └── docker.yml          # Docker build & push CI workflow
 ├── infra/                  # Terraform IaC (GCP Cloud Run, GCS data bucket, etc.)
 ├── src/applybot/
 │   ├── config.py           # Pydantic Settings (env-based)
-│   ├── models/             # SQLAlchemy ORM (Job, Application, UserProfile)
+│   ├── models/             # Pydantic models + Firestore CRUD (Job, Application, UserProfile)
 │   ├── llm/                # Anthropic Claude SDK wrapper
 │   ├── profile/            # Profile CRUD + .docx resume parsing/generation
 │   ├── discovery/          # Multi-source job scraping + dedup + ranking
@@ -109,7 +106,7 @@ Each component under `src/applybot/` has its own README describing its purpose, 
                │
 ┌──────────────┴──────────────────────────────┐
 │    Shared Foundation                         │
-│  Models (ORM) · LLM Client · Profile · Config│
+│  Models (Firestore) · LLM Client · Profile · Config│
 └─────────────────────────────────────────────┘
 ```
 
@@ -117,7 +114,7 @@ Each component under `src/applybot/` has its own README describing its purpose, 
 
 - **LLM Client** — Used by: Query Builder, Ranker, Resume Tailor, Question Answerer, Gmail classifier, Cover Letter generator
 - **Profile** — Central source of truth consulted by Discovery (query building, ranking) and Application (tailoring, answering)
-- **Models** — Shared database schema accessed by all components
+- **Models** — Shared Firestore data layer accessed by all components
 
 ---
 
@@ -125,57 +122,59 @@ Each component under `src/applybot/` has its own README describing its purpose, 
 
 ### Job
 
-| Column | Type | Notes |
+| Field | Type | Notes |
 |---|---|---|
-| id | int (PK) | Auto-increment |
+| id | str | Firestore document ID |
 | title | str | Job title |
 | company | str | Company name |
 | location | str | Job location |
-| description | text | Full job description |
+| description | str | Full job description |
 | url | str | Application URL |
 | source | JobSource enum | SERPAPI, GREENHOUSE, LEVER, EU_REMOTE_JOBS, MANUAL |
-| posted_date | date | When the job was posted |
-| discovered_date | datetime | When we found it |
+| posted_date | str | When the job was posted |
+| discovered_date | str | When we found it (ISO format) |
 | relevance_score | int | 0-100 score from ranker |
+| relevance_reasoning | str | Ranker's explanation |
 | status | JobStatus enum | NEW → REVIEWING → APPROVED → APPLIED / SKIPPED / REJECTED |
 
 ### UserProfile
 
-| Column | Type | Notes |
+| Field | Type | Notes |
 |---|---|---|
-| id | int (PK) | Auto-increment |
 | name | str | Full name |
 | email | str | Contact email |
-| summary | text | Professional summary |
-| skills | JSON | Structured skills data |
-| experiences | JSON | Work experience entries |
-| education | JSON | Education entries |
-| preferences | JSON | Job preferences (roles, locations, salary, etc.) |
+| summary | str | Professional summary |
+| skills | list | Structured skills data |
+| experiences | list | Work experience entries |
+| education | list | Education entries |
+| preferences | dict | Job preferences (roles, locations, salary, etc.) |
 | resume_path | str | Path to base .docx resume |
+
+Stored as a singleton document (`"default"`) in the `profiles` collection.
 
 ### Application
 
-| Column | Type | Notes |
+| Field | Type | Notes |
 |---|---|---|
-| id | int (PK) | Auto-increment |
-| job_id | int (FK → Job) | Which job this applies to |
+| id | str | Firestore document ID |
+| job_id | str | Which job this applies to |
 | tailored_resume_path | str | Path to generated .docx |
-| cover_letter | text | Generated cover letter |
-| answers | JSON | dict of question → answer pairs |
+| cover_letter | str | Generated cover letter |
+| answers | dict | question → answer pairs |
 | status | ApplicationStatus | DRAFT → READY_FOR_REVIEW → APPROVED → SUBMITTED → RECEIVED → INTERVIEW → OFFER / REJECTED / WITHDRAWN |
-| created_at | datetime | When the application was prepared |
-| submitted_at | datetime | When it was actually submitted |
+| created_at | str | When the application was prepared (ISO format) |
+| submitted_at | str | When it was actually submitted (ISO format) |
 
 ### ApplicationStatusUpdate
 
-| Column | Type | Notes |
+| Field | Type | Notes |
 |---|---|---|
-| id | int (PK) | Auto-increment |
-| application_id | int (FK → Application) | Audit trail |
+| id | str | Firestore document ID |
+| application_id | str | References an Application |
 | status | ApplicationStatus | New status |
 | source | UpdateSource | MANUAL, GMAIL, SYSTEM |
-| details | text | Optional notes |
-| timestamp | datetime | When the change occurred |
+| details | str | Optional notes |
+| timestamp | str | When the change occurred (ISO format) |
 
 ---
 
@@ -309,8 +308,8 @@ Pydantic Settings, loading from environment variables or a `.env` file:
 ANTHROPIC_API_KEY=sk-ant-...
 SERPAPI_KEY=...
 
-# Database (defaults to local SQLite)
-DATABASE_URL=sqlite:///data/applybot.db
+# GCP Project (for Firestore; falls back to ADC)
+GCP_PROJECT_ID=your-gcp-project-id
 
 # Gmail (optional, for tracking)
 GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
@@ -350,13 +349,13 @@ pytest
 | Decision | Rationale |
 |---|---|
 | Direct Anthropic SDK (no LangChain) | Simpler, fewer deps, more debuggable |
-| SQLite everywhere | No DB server to manage or pay for; GCS FUSE mount provides persistence in Cloud Run at ~$0.02/month |
+| Firestore (serverless NoSQL) | No DB server to manage or pay for; generous free tier, scales automatically |
 | Human-in-the-loop | Agent never submits without explicit approval |
 | Resume honesty guardrail | Tailoring can only rephrase/reorder, not fabricate |
 | SerpAPI for LinkedIn/Indeed | Reliable aggregator API, avoids anti-bot issues |
 | Free APIs for Greenhouse/Lever | Public boards APIs, no auth needed |
 | FastHTML for dashboard | Lightweight, Python-native, HTMX-powered, no pyarrow/heavy deps |
-| Lazy engine creation | Models import without requiring a DB connection |
+| Lazy client creation | Models import without requiring a DB connection |
 | Async scraper execution | All scrapers run in parallel; one failing doesn't block others |
 | Batch LLM ranking | Jobs sent in groups of 5 to reduce API calls and costs |
 
@@ -374,10 +373,10 @@ pytest
 
 ### Infrastructure
 
-- **Database**: SQLite file stored in a GCS bucket (`$project_id-applybot-data`), mounted at `/data` in Cloud Run via native FUSE volume. No DB server, no connection pool.
-- **Dashboard**: GCP Cloud Run (FastHTML + FastAPI), `max-instances=1` to prevent concurrent SQLite writers
+- **Database**: Google Cloud Firestore (FIRESTORE_NATIVE mode). Serverless, no provisioning or connection pools.
+- **Dashboard**: GCP Cloud Run (FastHTML + FastAPI), scales 0–1
 - **Secrets**: GCP Secret Manager for API keys
-- **Auth**: Service account with minimal permissions (`storage.objectAdmin` on data bucket)
+- **Auth**: Service account with `roles/datastore.user` for Firestore access
 - **Scheduling**: Cloud Scheduler cron jobs
 
 ### CI/CD (GitHub Actions)
@@ -419,7 +418,7 @@ See [DEPLOY.md](DEPLOY.md) § "CI/CD with GitHub Actions" for full setup instruc
 - **SerpAPI**: ~$50/month for 5,000 searches
 - **Claude API**: Costs depend on usage; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
 - **Greenhouse/Lever APIs**: Free (public)
-- **GCS data bucket**: SQLite file storage — ~$0.02/month (essentially free)
+- **Firestore**: Free tier (1 GiB storage + 50K reads/day) — essentially free at low usage
 - **GCP Cloud Functions**: Free tier covers light usage
 
 Cost tracking per pipeline run is planned but not yet implemented.
@@ -464,7 +463,7 @@ Application tracker state machine, Gmail integration with email classification.
 FastAPI REST API (10 endpoints), FastHTML frontend (4 pages, PicoCSS + HTMX).
 
 ### Phase 7: Cloud Deployment 🔧
-GCP Cloud Run, Cloud SQL PostgreSQL, Secret Manager, Artifact Registry — Terraform IaC ready. GitHub Actions CI/CD workflows for Terraform and Docker. Cloud Scheduler for daily runs still planned.
+GCP Cloud Run, Firestore, Secret Manager, Artifact Registry — Terraform IaC ready. GitHub Actions CI/CD workflows for Terraform and Docker. Cloud Scheduler configured.
 
 ---
 

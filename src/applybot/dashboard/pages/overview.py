@@ -7,9 +7,8 @@ from typing import Any
 from fasthtml.common import H1, Grid
 
 from applybot.dashboard.components import page, progress_table, stat_card
-from applybot.models.application import Application, ApplicationStatus
-from applybot.models.base import get_session
-from applybot.models.job import Job, JobStatus
+from applybot.models.application import count_applications_by_status
+from applybot.models.job import count_jobs_by_status
 
 PIPELINE_STAGES = ["new", "reviewing", "approved", "applied"]
 
@@ -17,24 +16,11 @@ PIPELINE_STAGES = ["new", "reviewing", "approved", "applied"]
 def register(rt: Any) -> None:
     @rt("/")
     def get() -> tuple[object, ...]:
-        with get_session() as session:
-            job_counts: dict[str, int] = {}
-            for status in JobStatus:
-                count = session.query(Job).filter(Job.status == status).count()
-                if count > 0:
-                    job_counts[status.value] = count
-            total_jobs = session.query(Job).count()
+        job_counts = count_jobs_by_status()
+        total_jobs = job_counts.get("total", 0)
 
-            app_counts: dict[str, int] = {}
-            for app_status in ApplicationStatus:
-                count = (
-                    session.query(Application)
-                    .filter(Application.status == app_status)
-                    .count()
-                )
-                if count > 0:
-                    app_counts[app_status.value] = count
-            total_apps = session.query(Application).count()
+        app_counts = count_applications_by_status()
+        total_apps = app_counts.get("total", 0)
 
         stats = Grid(
             stat_card(str(total_jobs), "Total Jobs"),
@@ -52,7 +38,11 @@ def register(rt: Any) -> None:
         if total_apps > 0:
             app_section = progress_table(
                 "Application Statuses",
-                [(s.replace("_", " ").capitalize(), c) for s, c in app_counts.items()],
+                [
+                    (s.replace("_", " ").capitalize(), c)
+                    for s, c in app_counts.items()
+                    if s != "total"
+                ],
             )
 
         return page(

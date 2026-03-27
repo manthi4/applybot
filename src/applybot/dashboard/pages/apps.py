@@ -16,9 +16,13 @@ from applybot.dashboard.components import (
     page,
     status_badge,
 )
-from applybot.models.application import Application, ApplicationStatus, UpdateSource
-from applybot.models.base import get_session
-from applybot.models.job import Job
+from applybot.models.application import (
+    Application,
+    ApplicationStatus,
+    UpdateSource,
+    query_applications,
+)
+from applybot.models.job import Job, get_job
 from applybot.tracking.tracker import InvalidTransitionError, update_status
 
 
@@ -79,39 +83,35 @@ def _build_app_card(application: Application, job: Job | None) -> object:
 def register(rt: Any) -> None:
     @rt("/apps")
     def get(status: str = "") -> tuple[object, ...]:
-        with get_session() as session:
-            query = session.query(Application)
-            if status:
-                try:
-                    query = query.filter(
-                        Application.status == ApplicationStatus(status)
-                    )
-                except ValueError:
-                    pass
-            query = query.order_by(Application.created_at.desc())
-            apps = query.limit(200).all()
+        app_status = None
+        if status:
+            try:
+                app_status = ApplicationStatus(status)
+            except ValueError:
+                pass
+        apps = query_applications(status=app_status, limit=200)
 
-            form = filter_form(
-                "/apps",
-                [
-                    {
-                        "name": "status",
-                        "label": "Status",
-                        "type": "select",
-                        "options": _app_status_options(status),
-                        "selected": status,
-                    },
-                ],
-            )
-            count_text = P(Strong(f"{len(apps)} applications"))
-            cards = [
-                _build_app_card(app, session.get(Job, app.job_id)) for app in apps
-            ] or [alert("No applications found.")]
+        form = filter_form(
+            "/apps",
+            [
+                {
+                    "name": "status",
+                    "label": "Status",
+                    "type": "select",
+                    "options": _app_status_options(status),
+                    "selected": status,
+                },
+            ],
+        )
+        count_text = P(Strong(f"{len(apps)} applications"))
+        cards = [_build_app_card(app, get_job(app.job_id)) for app in apps] or [
+            alert("No applications found.")
+        ]
 
         return page(H1("Applications"), form, count_text, *cards, title="Applications")
 
     @rt("/apps/{app_id}/approve")
-    def post(app_id: int) -> object:
+    def post(app_id: str) -> object:
         try:
             update_status(app_id, ApplicationStatus.APPROVED, UpdateSource.MANUAL)
             return confirmed_card("app", app_id, f"Application #{app_id}", "Approved")
@@ -119,7 +119,7 @@ def register(rt: Any) -> None:
             return alert(str(e), "error")
 
     @rt("/apps/{app_id}/draft")
-    def post_draft(app_id: int) -> object:
+    def post_draft(app_id: str) -> object:
         try:
             update_status(app_id, ApplicationStatus.DRAFT, UpdateSource.MANUAL)
             return confirmed_card(

@@ -108,9 +108,8 @@ applybot serve-api
 The FastHTML + FastAPI app (`applybot serve`) is hosted on **GCP Cloud Run**:
 - Build a Docker image from the project root and push to Artifact Registry
 - Deploy as a Cloud Run service with:
-  - `DATABASE_URL=sqlite:////data/applybot.db` injected as an environment variable
-  - GCS bucket (`$project_id-applybot-data`) mounted at `/data` via Cloud Run's native FUSE volume — the SQLite file lives here and persists across deploys
-  - `max-instances=1` to prevent concurrent SQLite write contention
+  - `GCP_PROJECT_ID` injected as an environment variable (for Firestore)
+  - Service account with `roles/datastore.user` for Firestore access
 - Expose on HTTPS via the Cloud Run-managed URL
 
 ### Secrets

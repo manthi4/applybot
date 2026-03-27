@@ -36,14 +36,6 @@ resource "google_storage_bucket_object" "discovery_source" {
   source = data.archive_file.discovery_source.output_path
 }
 
-# --- TCP DATABASE_URL for Cloud Functions (no Cloud SQL socket mount available) ---
-locals {
-  # Cloud Functions Gen 2 does not support Cloud SQL volume mounts like Cloud Run.
-  # Uses a direct TCP connection to Cloud SQL's public IP instead.
-  # TODO: Replace with VPC connector + private IP for production hardening.
-  discovery_database_url = "postgresql+psycopg://applybot:${var.db_password}@${google_sql_database_instance.main.public_ip_address}/applybot"
-}
-
 # --- Cloud Function Gen 2 ---
 resource "google_cloudfunctions2_function" "discovery" {
   name     = "applybot-discovery"
@@ -68,7 +60,7 @@ resource "google_cloudfunctions2_function" "discovery" {
     service_account_email = google_service_account.cloud_run.email
 
     environment_variables = {
-      DATABASE_URL = local.discovery_database_url
+      GCP_PROJECT_ID = var.project_id
     }
 
     secret_environment_variables {
@@ -88,7 +80,7 @@ resource "google_cloudfunctions2_function" "discovery" {
 
   depends_on = [
     google_project_service.services,
-    google_project_iam_member.cloud_run_sql,
+    google_project_iam_member.cloud_run_firestore,
     google_project_iam_member.cloud_run_secrets,
   ]
 }

@@ -1,6 +1,6 @@
 # Deploying ApplyBot
 
-GCP Cloud Run + Cloud SQL PostgreSQL, managed with Terraform.
+GCP Cloud Run + Firestore, managed with Terraform.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ GCP Cloud Run + Cloud SQL PostgreSQL, managed with Terraform.
 gcloud projects create applybot-prod --name="ApplyBot"
 gcloud config set project applybot-prod
 
-# Enable billing (required for Cloud SQL, Cloud Run)
+# Enable billing (required for Cloud Run, Firestore)
 # Visit: https://console.cloud.google.com/billing
 # Link your project to a billing account
 
@@ -36,10 +36,9 @@ Edit `terraform.tfvars` with your actual values:
 ```hcl
 project_id        = "applybot-prod"
 region            = "us-central1"
-db_password       = "your-strong-db-password"
 anthropic_api_key = "sk-ant-..."
-serpapi_key        = "your-serpapi-key"
-image_tag         = "v1"
+serpapi_key        = ""
+image_tag         = "latest"
 ```
 
 ## 3. Deploy Infrastructure
@@ -53,11 +52,12 @@ terraform apply       # Confirm with 'yes'
 ```
 
 This creates:
-- Cloud SQL PostgreSQL 15 instance (`db-f1-micro`)
+- Firestore database (FIRESTORE_NATIVE mode) with composite indexes
 - Artifact Registry repository
-- Secret Manager secrets (API keys, DB password)
+- Secret Manager secrets (API keys)
 - Cloud Run service (scales 0–1)
-- IAM bindings (Cloud Run → Cloud SQL, Secrets)
+- Cloud Functions + Cloud Scheduler for daily discovery
+- IAM bindings (Cloud Run → Firestore, Secrets)
 
 Note the outputs — you'll need the `artifact_registry` URL:
 
@@ -136,12 +136,11 @@ To test the Docker build locally before deploying:
 # Build
 docker build -t applybot .
 
-# Run with local SQLite (default)
-docker run -p 8000:8000 applybot
-
-# Run with a Postgres connection
+# Run with GCP credentials (Firestore uses ADC)
 docker run -p 8000:8000 \
-  -e DATABASE_URL="postgresql+psycopg://user:pass@host/applybot" \
+  -e GCP_PROJECT_ID="your-project-id" \
+  -e GOOGLE_APPLICATION_CREDENTIALS="/app/credentials.json" \
+  -v /path/to/credentials.json:/app/credentials.json:ro \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   applybot
 ```
@@ -167,9 +166,10 @@ Two workflows automate Terraform and Docker deployments.
    for role in \
      roles/artifactregistry.writer \
      roles/run.admin \
-     roles/cloudsql.admin \
+     roles/datastore.user \
      roles/secretmanager.admin \
      roles/storage.admin \
+     roles/cloudfunctions.admin \
      roles/iam.serviceAccountUser; do
      gcloud projects add-iam-policy-binding "$PROJECT_ID" \
        --member="serviceAccount:applybot-ci@${PROJECT_ID}.iam.gserviceaccount.com" \
@@ -185,7 +185,6 @@ Two workflows automate Terraform and Docker deployments.
    |--------|-------------|
    | `GCP_SA_KEY` | Contents of `ci-key.json` |
    | `GCP_PROJECT_ID` | GCP project ID (e.g. `applybot-prod`) |
-   | `TF_VAR_DB_PASSWORD` | Cloud SQL database password |
    | `TF_VAR_ANTHROPIC_API_KEY` | Anthropic API key |
    | `TF_VAR_SERPAPI_KEY` | SerpAPI key (optional) |
 
@@ -217,10 +216,9 @@ git commit -m "fix bug --docker"                 # builds & pushes Docker image
 ```bash
 cd infra
 
-# Cloud SQL has deletion_protection = true by default.
-# To destroy, first disable it:
-#   Edit cloud_sql.tf: deletion_protection = false
-#   terraform apply
+# Firestore database has deletion_protection = true by default.
+# To destroy, first set delete_protection_state = "DELETE_PROTECTION_DISABLED"
+# in firestore.tf, run terraform apply, then:
 
 terraform destroy
 ```
@@ -229,8 +227,8 @@ terraform destroy
 
 At minimal usage (scale-to-zero):
 - **Cloud Run**: Free tier covers up to 2M requests/month
-- **Cloud SQL** (`db-f1-micro`): ~$7–10/month (always on)
+- **Firestore**: Free tier covers 1 GiB storage + 50K reads + 20K writes per day
 - **Artifact Registry**: ~$0.10/GB/month storage
 - **Secret Manager**: Free tier covers 10,000 access operations/month
 
-Total: **~$8–12/month** at low usage, dominated by Cloud SQL.
+Total: **~$0–2/month** at low usage. Firestore free tier is generous for this use case.

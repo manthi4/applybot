@@ -1,23 +1,23 @@
 # Models
 
-Shared SQLAlchemy ORM models and database session management. This is the foundational data layer — all other components depend on these models.
+Pydantic data models and Firestore CRUD functions. This is the foundational data layer — all other components depend on these models.
 
 ## Files
 
-- **base.py** — Engine creation, session factory, `Base` declarative base
-- **job.py** — `Job` model for discovered job listings
-- **profile.py** — `UserProfile` model with JSON columns for structured data
-- **application.py** — `Application` model, status updates, and audit trail
+- **base.py** — Firestore client singleton (`get_db()`, `init_db()`)
+- **job.py** — `Job` model and CRUD functions for job listings
+- **profile.py** — `UserProfile` model with singleton document pattern
+- **application.py** — `Application`, `ApplicationStatusUpdate` models and CRUD functions
 
 ## Public API
 
 ### Database Setup
 
 ```python
-from applybot.models.base import get_session, init_db
+from applybot.models.base import get_db, init_db
 
-init_db()                  # Create all tables (dev only; use Alembic in prod)
-session = get_session()    # Get a new SQLAlchemy Session
+init_db()              # Verify Firestore connection (no schema needed)
+db = get_db()          # Get Firestore Client singleton
 ```
 
 ### Enums
@@ -32,18 +32,45 @@ from applybot.models.application import ApplicationStatus, UpdateSource
 # UpdateSource: MANUAL, GMAIL, SYSTEM
 ```
 
-### ORM Models
+### Pydantic Models
 
-| Model | Key Columns | Relationships |
+| Model | Key Fields | Firestore Collection |
 |---|---|---|
-| `Job` | title, company, location, description, url, source, posted_date, relevance_score, status | → Application |
-| `UserProfile` | name, email, summary, skills (JSON), experiences (JSON), education (JSON), preferences (JSON), resume_path | — |
-| `Application` | job_id (FK), tailored_resume_path, cover_letter, answers (JSON), status, submitted_at | → Job, → ApplicationStatusUpdate |
-| `ApplicationStatusUpdate` | application_id (FK), status, source, details, timestamp | → Application |
+| `Job` | id, title, company, location, description, url, source, posted_date, relevance_score, status | `jobs` |
+| `UserProfile` | name, email, summary, skills, experiences, education, preferences, resume_path | `profiles` (singleton doc `"default"`) |
+| `Application` | id, job_id, tailored_resume_path, cover_letter, answers, status, submitted_at | `applications` |
+| `ApplicationStatusUpdate` | id, application_id, status, source, details, timestamp | `application_status_updates` |
+
+### CRUD Functions
+
+**Jobs** (`job.py`):
+- `get_job(job_id: str) -> Job | None`
+- `add_job(job: Job) -> str` — returns generated doc ID
+- `add_jobs(jobs: list[Job]) -> int` — batch write, returns count
+- `update_job(job_id: str, **fields) -> None`
+- `query_jobs(status, min_score, limit) -> list[Job]`
+- `get_all_job_urls() -> set[str]`
+- `count_jobs_by_status() -> dict[str, int]`
+
+**Applications** (`application.py`):
+- `get_application(app_id: str) -> Application | None`
+- `add_application(app: Application) -> str`
+- `update_application(app_id: str, **fields) -> None`
+- `query_applications(status, limit) -> list[Application]`
+- `count_applications_by_status() -> dict[str, int]`
+- `add_status_update(update: ApplicationStatusUpdate) -> str`
+- `get_status_updates(app_id: str) -> list[ApplicationStatusUpdate]`
+- `get_applications_by_statuses(statuses) -> list[Application]`
+
+**Profile** (`profile.py`):
+- `get_profile() -> UserProfile | None`
+- `save_profile(profile: UserProfile) -> None`
+- `update_profile_fields(**fields) -> None`
+- `delete_profile() -> None`
 
 ## Boundaries
 
-- **No business logic** — models define schema and relationships only
+- **No business logic** — models define data shapes and CRUD only
 - **No direct imports from other applybot modules** — this is a leaf dependency
-- Consumers create their own sessions via `get_session()` and manage transactions
-- Database URL configured via `settings.database_url` (defaults to `sqlite:///data/applybot.db`)
+- All IDs are `str` (Firestore document IDs)
+- Database connection configured via `settings.gcp_project_id` (falls back to Application Default Credentials)

@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     # Job scraping
     serpapi_key: str = ""
 
-    # Database
-    database_url: str = "sqlite:///data/applybot.db"
+    # Google / GCP
+    gcp_project_id: str = ""
 
     # Google / Gmail
     google_application_credentials: str = ""
