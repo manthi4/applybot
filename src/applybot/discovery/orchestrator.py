@@ -35,14 +35,33 @@ class DiscoveryResult:
 
 
 # Default company slugs for Greenhouse/Lever scrapers
-# These can be configured via environment or a managed list
+# Slug = the subdomain used in the company's job board URL
+#   Greenhouse: https://boards.greenhouse.io/<slug>
+#   Lever:      https://jobs.lever.co/<slug>
 DEFAULT_GREENHOUSE_COMPANIES: list[str] = [
-    # Robotics / ML companies known to use Greenhouse
-    # Users should customize this list
+    "openai",
+    "waymo",
+    "covariant",
+    "nuro",
+    "zoox",
+    "imbue",
+    "shield-ai",
+    "robust-robotics",
+    "applovin",
+    "scale",
 ]
 
 DEFAULT_LEVER_COMPANIES: list[str] = [
-    # Robotics / ML companies known to use Lever
+    "anduril",
+    "scale-ai",
+    "boston-dynamics",
+    "figureai",
+    "skydio",
+    "physical-intelligence",
+    "apptronik",
+    "innerspace",
+    "cohere",
+    "mistral",
 ]
 
 
