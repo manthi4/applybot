@@ -22,7 +22,7 @@ applybot/
 │   │   └── scrapers/       # Pluggable scraper implementations (SerpAPI, Greenhouse, Lever, etc.)
 │   ├── application/        # Resume tailoring, Q&A generation, cover letters
 │   ├── tracking/           # Application state machine and Gmail integration
-│   └── dashboard/          # FastAPI REST API and Streamlit UI
+│   └── dashboard/          # FastHTML UI with TOTP session authentication
 └── tests/                  # pytest test suite
 ```
 

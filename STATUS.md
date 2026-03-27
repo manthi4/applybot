@@ -27,8 +27,7 @@ All modules are **implemented and importable**. No LLM-calling code has been tes
 | Application Preparer | Orchestrates tailor + answers + cover letter → Application record |
 | Tracker | State machine with validated transitions |
 | Gmail Integration | Email scanning + Claude classification → status updates |
-| FastAPI Backend | REST endpoints for jobs, applications, profile, summary |
-| FastHTML Frontend | Overview, Job Queue, Applications, Profile pages (PicoCSS + HTMX) |
+| FastHTML Frontend | Overview, Job Queue, Applications, Profile pages (PicoCSS + HTMX) + TOTP session auth |
 | CLI | `init-db`, `serve`, `bootstrap-profile`, `run-discovery` commands via Click |
 | Deployment | Dockerfile, Terraform (GCP Cloud Run + Firestore + Cloud Functions + Cloud Scheduler + Artifact Registry + Secrets), health check |
 

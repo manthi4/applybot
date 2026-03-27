@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Server
     port: int = 8000
 
+    # Dashboard auth (TOTP — use `applybot setup-auth` to generate and scan QR code)
+    dashboard_totp_secret: str = ""
+
     # Discovery
     discovery_relevance_threshold: int = 50
     discovery_max_jobs_per_run: int = 100

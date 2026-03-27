@@ -52,6 +52,14 @@ def nav() -> Nav:
             Li(A("Jobs", href="/jobs")),
             Li(A("Applications", href="/apps")),
             Li(A("Profile", href="/profile")),
+            Li(
+                Form(
+                    Button("Logout", type="submit", cls="secondary outline"),
+                    method="post",
+                    action="/logout",
+                    style="margin:0",
+                )
+            ),
         ),
     )
 

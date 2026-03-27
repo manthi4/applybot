@@ -1,15 +1,12 @@
 # Dashboard
 
-Central web interface for monitoring and controlling ApplyBot. Two components:
-
-1. **FastHTML frontend** (`frontend.py`) — Full dashboard UI with PicoCSS styling, HTMX interactivity, and a dark slate-blue/red theme.
-2. **FastAPI REST API** (`api.py`) — Standalone REST API for programmatic access (used by external tools, not by the frontend).
+Central web interface for monitoring and controlling ApplyBot. A FastHTML server with PicoCSS styling, HTMX interactivity, and a dark slate-blue/red theme. Protected by TOTP authentication.
 
 ## Files
 
 ```
 dashboard/
-├── frontend.py       # App setup, route registration, entrypoint
+├── frontend.py       # App setup, auth middleware, login/logout routes, entrypoint
 ├── theme.py          # Dark slate-blue + slate-red PicoCSS theme overrides
 ├── components.py     # Reusable UI components (nav, page, cards, forms, badges)
 ├── pages/
@@ -18,7 +15,6 @@ dashboard/
 │   ├── jobs.py       # Job queue — list, filter, approve, skip
 │   ├── apps.py       # Applications — list, filter, approve, draft
 │   └── profile.py    # Profile — view and edit user profile
-├── api.py            # FastAPI REST API (10 endpoints)
 └── README.md
 ```
 
@@ -49,7 +45,25 @@ The frontend uses a modular architecture:
 3. **Applications** (`/apps`) — Applications by status with cover letter, answers, and review actions
 4. **Profile** (`/profile`) — Name/email/summary editor + full profile JSON display
 
-The frontend queries the database directly using Firestore CRUD functions from models — no HTTP calls to the REST API. Interactive actions (approve, skip, status changes) use HTMX partial page swaps.
+The frontend queries the database directly using Firestore CRUD functions from models. Interactive actions (approve, skip, status changes) use HTMX partial page swaps.
+
+### Authentication
+
+All routes except `/healthz` are protected by TOTP (Time-Based One-Time Password) authentication.
+
+- When `DASHBOARD_TOTP_SECRET` is set: visiting any page redirects to `/login` if not authenticated. Enter the 6-digit code from your authenticator app (Google Authenticator, Authy, etc.) to access the dashboard. Sessions last 24 hours.
+- When `DASHBOARD_TOTP_SECRET` is not set (dev mode): auth is disabled — the dashboard is open.
+
+Session state is stored in a signed cookie (derived from the TOTP secret). The `/login` and `/healthz` routes are always open.
+
+To set up authentication:
+```bash
+# Generate a new TOTP secret and QR code to scan with your authenticator app
+applybot setup-auth
+
+# Then add the secret to your .env (local) or GCP Secret Manager (production)
+DASHBOARD_TOTP_SECRET=<base32-secret>
+```
 
 ### Running the Dashboard
 
@@ -61,51 +75,18 @@ applybot serve --host 0.0.0.0 --port 8080 --reload
 python -m applybot serve
 ```
 
-## REST API
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/jobs` | List jobs (filter: `status`, `min_score`; `limit` <= 500) |
-| GET | `/jobs/{job_id}` | Job details |
-| POST | `/jobs/{job_id}/approve` | Mark job as APPROVED |
-| POST | `/jobs/{job_id}/skip` | Mark job as SKIPPED |
-| GET | `/applications` | List applications (filter: `status`; `limit` <= 500) |
-| GET | `/applications/{app_id}` | Application details |
-| POST | `/applications/{app_id}/review` | Update application status (body: `{"action": "approve"}`) |
-| GET | `/profile` | Current user profile |
-| PUT | `/profile` | Update profile fields |
-| GET | `/dashboard/summary` | Counts by status for jobs and applications |
-
-### Running the API
-
-```bash
-applybot serve-api
-applybot serve-api --host 0.0.0.0 --port 8001 --reload
-```
-
-## CLI
-
-```bash
-# Start dashboard (FastHTML, default port 8000)
-applybot serve
-
-# Start REST API only (FastAPI, default port 8001)
-applybot serve-api
-```
-
 ## Boundaries
 
-- **Depends on**: `models` (Firestore CRUD), `config` (GCP project), `tracking` (status transitions)
+- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret), `tracking` (status transitions)
 - **Does not depend on**: LLM, Discovery, Application, or Profile modules directly
-- **Used by**: End users via browser (frontend), other services via REST API
-- The frontend accesses the database directly; the REST API is an independent interface
+- **Used by**: End users via browser (authenticated with TOTP)
 
 
 ## Cloud Deployment
 
 ### Dashboard → Cloud Run
 
-The FastHTML + FastAPI app (`applybot serve`) is hosted on **GCP Cloud Run**:
+The FastHTML app (`applybot serve`) is hosted on **GCP Cloud Run**:
 - Build a Docker image from the project root and push to Artifact Registry
 - Deploy as a Cloud Run service with:
   - `GCP_PROJECT_ID` injected as an environment variable (for Firestore)
