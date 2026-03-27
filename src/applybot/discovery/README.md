@@ -76,6 +76,24 @@ ranked: list[tuple[RawJob, int, str]] = rank_jobs(jobs, profile)
 # Returns (job, score, reasoning) tuples, filtered by threshold
 ```
 
+## Deployment
+
+### Cloud Function (GCP)
+
+Discovery runs as a **Cloud Functions Gen 2** function, triggered daily by Cloud Scheduler.
+
+- **Entry point**: `handle_discovery` in `main.py` (project root)
+- **Runtime**: Python 3.12, 512Mi memory, 300s timeout
+- **Schedule**: Configurable via `discovery_schedule` Terraform variable (default: `0 8 * * *` — daily at 8:00 UTC)
+- **Terraform**: `infra/cloud_functions.tf`
+
+### CLI (local)
+
+```bash
+applybot run-discovery
+applybot run-discovery --location "Remote" --max-results 50
+```
+
 ## Boundaries
 
 - **Depends on**: `models` (Job ORM, JobStatus, JobSource), `llm` (query building, ranking), `profile` (user profile for queries and ranking), `config` (API keys, thresholds)

@@ -122,3 +122,26 @@ def bootstrap_profile(resume_path: str, name: str | None, email: str | None) -> 
     click.echo(f"  Experiences: {len(experiences)} items")
     click.echo(f"  Education:   {len(education)} items")
     click.echo(f"  Resume:      {resume_file}")
+
+
+@cli.command("run-discovery")
+@click.option("--location", default="", help="Location filter for job search")
+@click.option("--max-results", default=None, type=int, help="Max jobs to return")
+def run_discovery_cmd(location: str, max_results: int | None) -> None:
+    """Run the job discovery pipeline."""
+    import asyncio
+
+    from applybot.discovery.orchestrator import run_discovery
+    from applybot.models.base import init_db
+
+    init_db()
+    result = asyncio.run(run_discovery(location=location, max_results=max_results))
+    click.echo("Discovery complete:")
+    click.echo(f"  Scraped:    {result.total_scraped}")
+    click.echo(f"  Unique:     {result.after_dedup}")
+    click.echo(f"  Relevant:   {result.above_threshold}")
+    click.echo(f"  New saved:  {result.new_jobs_saved}")
+    if result.top_matches:
+        click.echo("\nTop matches:")
+        for match in result.top_matches[:5]:
+            click.echo(f"  [{match['score']}] {match['title']} @ {match['company']}")
