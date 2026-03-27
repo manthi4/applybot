@@ -16,8 +16,7 @@ from applybot.dashboard.components import (
     page,
     status_badge,
 )
-from applybot.models.base import get_session
-from applybot.models.job import Job, JobStatus
+from applybot.models.job import Job, JobStatus, get_job, query_jobs, update_job
 
 
 def _job_status_options(current: str) -> list[tuple[str, str]]:
@@ -38,10 +37,12 @@ def _build_job_card(job: Job) -> object:
             job.location,
             " | ",
             Strong("Source: "),
-            job.source.value,
+            job.source.value if hasattr(job.source, "value") else str(job.source),
             " | ",
             Strong("Status: "),
-            status_badge(job.status.value),
+            status_badge(
+                job.status.value if hasattr(job.status, "value") else str(job.status)
+            ),
         ),
     ]
     if job.relevance_reasoning:
@@ -63,67 +64,61 @@ def _build_job_card(job: Job) -> object:
 def register(rt: Any) -> None:
     @rt("/jobs")
     def get(status: str = "", min_score: int = 0) -> tuple[object, ...]:
-        with get_session() as session:
-            query = session.query(Job)
-            if status:
-                try:
-                    query = query.filter(Job.status == JobStatus(status))
-                except ValueError:
-                    pass
-            if min_score > 0:
-                query = query.filter(Job.relevance_score >= min_score)
-            query = query.order_by(Job.relevance_score.desc().nullslast())
-            jobs = query.limit(200).all()
+        job_status = None
+        if status:
+            try:
+                job_status = JobStatus(status)
+            except ValueError:
+                pass
+        jobs = query_jobs(
+            status=job_status,
+            min_score=min_score if min_score > 0 else None,
+            limit=200,
+        )
 
-            form = filter_form(
-                "/jobs",
-                [
-                    {
-                        "name": "status",
-                        "label": "Status",
-                        "type": "select",
-                        "options": _job_status_options(status),
-                        "selected": status,
-                    },
-                    {
-                        "name": "min_score",
-                        "label": "Min Score",
-                        "type": "number",
-                        "value": min_score,
-                        "min": 0,
-                        "max": 100,
-                    },
-                ],
-            )
-            count_text = P(Strong(f"{len(jobs)} jobs found"))
-            cards = [_build_job_card(j) for j in jobs] or [
-                alert("No jobs found matching your filters.")
-            ]
+        form = filter_form(
+            "/jobs",
+            [
+                {
+                    "name": "status",
+                    "label": "Status",
+                    "type": "select",
+                    "options": _job_status_options(status),
+                    "selected": status,
+                },
+                {
+                    "name": "min_score",
+                    "label": "Min Score",
+                    "type": "number",
+                    "value": min_score,
+                    "min": 0,
+                    "max": 100,
+                },
+            ],
+        )
+        count_text = P(Strong(f"{len(jobs)} jobs found"))
+        cards = [_build_job_card(j) for j in jobs] or [
+            alert("No jobs found matching your filters.")
+        ]
 
         return page(H1("Job Queue"), form, count_text, *cards, title="Job Queue")
 
     @rt("/jobs/{job_id}/approve")
-    def post(job_id: int) -> object:
-        with get_session() as session:
-            job = session.get(Job, job_id)
-            if job is None:
-                return alert("Job not found.", "error")
-            if job.status != JobStatus.NEW:
-                return alert(f"Job is {job.status.value}, not new.", "error")
-            job.status = JobStatus.APPROVED
-            session.commit()
-            return confirmed_card(
-                "job", job.id, f"{job.title} at {job.company}", "Approved"
-            )
+    def post(job_id: str) -> object:
+        job = get_job(job_id)
+        if job is None:
+            return alert("Job not found.", "error")
+        if job.status != JobStatus.NEW:
+            return alert(f"Job is {job.status.value}, not new.", "error")
+        update_job(job_id, status=JobStatus.APPROVED)
+        return confirmed_card(
+            "job", job.id, f"{job.title} at {job.company}", "Approved"
+        )
 
     @rt("/jobs/{job_id}/skip")
-    def post_skip(job_id: int) -> object:
-        with get_session() as session:
-            job = session.get(Job, job_id)
-            if job is None:
-                return alert("Job not found.", "error")
-            job.status = JobStatus.SKIPPED
-            session.commit()
-            return confirmed_card(
-                "job", job.id, f"{job.title} at {job.company}", "Skipped"
-            )
+    def post_skip(job_id: str) -> object:
+        job = get_job(job_id)
+        if job is None:
+            return alert("Job not found.", "error")
+        update_job(job_id, status=JobStatus.SKIPPED)
+        return confirmed_card("job", job.id, f"{job.title} at {job.company}", "Skipped")

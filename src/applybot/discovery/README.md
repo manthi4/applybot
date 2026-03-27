@@ -96,7 +96,7 @@ applybot run-discovery --location "Remote" --max-results 50
 
 ## Boundaries
 
-- **Depends on**: `models` (Job ORM, JobStatus, JobSource), `llm` (query building, ranking), `profile` (user profile for queries and ranking), `config` (API keys, thresholds)
+- **Depends on**: `models` (Job, JobStatus, JobSource), `llm` (query building, ranking), `profile` (user profile for queries and ranking), `config` (API keys, thresholds)
 - **Does not depend on**: Application, Tracking, or Dashboard
 - **Used by**: CLI/scheduler entry points, Dashboard (via DB)
 - Scrapers are isolated from each other — one scraper failing doesn't block others

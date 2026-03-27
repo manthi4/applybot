@@ -10,9 +10,12 @@ from pydantic import BaseModel
 
 from applybot.config import settings
 from applybot.llm.client import llm
-from applybot.models.application import Application, ApplicationStatus, UpdateSource
-from applybot.models.base import get_session
-from applybot.models.job import Job
+from applybot.models.application import (
+    ApplicationStatus,
+    UpdateSource,
+    get_applications_by_statuses,
+)
+from applybot.models.job import get_job
 from applybot.tracking.tracker import update_status
 
 logger = logging.getLogger(__name__)
@@ -94,22 +97,18 @@ def _get_gmail_service() -> Any:
 
 def _get_applied_companies() -> list[str]:
     """Get list of companies with submitted applications."""
-    with get_session() as session:
-        results = (
-            session.query(Job.company)
-            .join(Application, Application.job_id == Job.id)
-            .filter(
-                Application.status.in_(
-                    [
-                        ApplicationStatus.SUBMITTED,
-                        ApplicationStatus.RECEIVED,
-                    ]
-                )
-            )
-            .distinct()
-            .all()
-        )
-        return [r[0] for r in results]
+    apps = get_applications_by_statuses(
+        [
+            ApplicationStatus.SUBMITTED,
+            ApplicationStatus.RECEIVED,
+        ]
+    )
+    companies: set[str] = set()
+    for app in apps:
+        job = get_job(app.job_id)
+        if job:
+            companies.add(job.company)
+    return list(companies)
 
 
 def _search_emails(service: Any, company: str) -> list[dict[str, Any]]:
@@ -199,21 +198,18 @@ Determine:
         return None
 
     # Find the matching application
-    with get_session() as session:
-        application = (
-            session.query(Application)
-            .join(Job, Application.job_id == Job.id)
-            .filter(Job.company.ilike(f"%{company}%"))
-            .filter(
-                Application.status.in_(
-                    [
-                        ApplicationStatus.SUBMITTED,
-                        ApplicationStatus.RECEIVED,
-                    ]
-                )
-            )
-            .first()
-        )
+    apps = get_applications_by_statuses(
+        [
+            ApplicationStatus.SUBMITTED,
+            ApplicationStatus.RECEIVED,
+        ]
+    )
+    application = None
+    for app in apps:
+        job = get_job(app.job_id)
+        if job and company.lower() in job.company.lower():
+            application = app
+            break
 
     if application is None:
         logger.debug("No matching application found for %s", company)
@@ -235,5 +231,5 @@ Determine:
             "confidence": result.confidence,
         }
     except Exception:
-        logger.exception("Failed to update application %d status", application.id)
+        logger.exception("Failed to update application %s status", application.id)
         return None

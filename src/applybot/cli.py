@@ -17,13 +17,11 @@ def cli() -> None:
 
 @cli.command()
 def init_db() -> None:
-    """Initialize the database (run migrations)."""
-    from alembic import command
-    from alembic.config import Config
+    """Verify Firestore connection."""
+    from applybot.models.base import init_db as _init_db
 
-    alembic_cfg = Config("alembic.ini")
-    command.upgrade(alembic_cfg, "head")
-    click.echo("Database initialized successfully.")
+    _init_db()
+    click.echo("Firestore connection verified successfully.")
 
 
 @cli.command()
@@ -62,7 +60,6 @@ def serve_api(host: str, port: int | None, reload: bool) -> None:
 @click.option("--email", default=None, help="Set email address")
 def bootstrap_profile(resume_path: str, name: str | None, email: str | None) -> None:
     """Import a .docx resume and create/update the user profile."""
-    from applybot.models.base import init_db
     from applybot.profile.manager import ProfileManager
     from applybot.profile.resume import parse_resume
 
@@ -72,8 +69,6 @@ def bootstrap_profile(resume_path: str, name: str | None, email: str | None) -> 
         raise click.BadParameter(
             "Resume file must be a .docx file.", param_hint="resume_path"
         )
-
-    init_db()
 
     resume_data = parse_resume(resume_file)
 
@@ -132,9 +127,7 @@ def run_discovery_cmd(location: str, max_results: int | None) -> None:
     import asyncio
 
     from applybot.discovery.orchestrator import run_discovery
-    from applybot.models.base import init_db
 
-    init_db()
     result = asyncio.run(run_discovery(location=location, max_results=max_results))
     click.echo("Discovery complete:")
     click.echo(f"  Scraped:    {result.total_scraped}")

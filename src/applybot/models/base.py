@@ -1,34 +1,25 @@
-from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+"""Firestore client management — lazy singleton."""
+
+from __future__ import annotations
+
+from google.cloud.firestore_v1 import Client
 
 from applybot.config import settings
 
-
-class Base(DeclarativeBase):
-    pass
+_client: Client | None = None
 
 
-_engine: Engine | None = None
-_session_factory: sessionmaker[Session] | None = None
-
-
-def _get_engine() -> Engine:
-    global _engine
-    if _engine is None:
-        _engine = create_engine(settings.database_url, echo=False)
-    return _engine
-
-
-def _get_session_factory() -> sessionmaker[Session]:
-    global _session_factory
-    if _session_factory is None:
-        _session_factory = sessionmaker(bind=_get_engine())
-    return _session_factory
-
-
-def get_session() -> Session:
-    return _get_session_factory()()
+def get_db() -> Client:
+    """Return the Firestore client singleton (lazy-initialized)."""
+    global _client
+    if _client is None:
+        kwargs = {}
+        if settings.gcp_project_id:
+            kwargs["project"] = settings.gcp_project_id
+        _client = Client(**kwargs)
+    return _client
 
 
 def init_db() -> None:
-    Base.metadata.create_all(bind=_get_engine())
+    """Verify Firestore connection. No schema needed (schema-less)."""
+    get_db()
