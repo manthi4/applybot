@@ -49,7 +49,7 @@ The frontend uses a modular architecture:
 3. **Applications** (`/apps`) — Applications by status with cover letter, answers, and review actions
 4. **Profile** (`/profile`) — Name/email/summary editor + full profile JSON display
 
-The frontend queries the database directly using `get_session()` from `models.base` — no HTTP calls to the REST API. Interactive actions (approve, skip, status changes) use HTMX partial page swaps.
+The frontend queries the database directly using Firestore CRUD functions from models — no HTTP calls to the REST API. Interactive actions (approve, skip, status changes) use HTMX partial page swaps.
 
 ### Running the Dashboard
 
@@ -95,7 +95,7 @@ applybot serve-api
 
 ## Boundaries
 
-- **Depends on**: `models` (ORM), `config` (database URL), `tracking` (status transitions)
+- **Depends on**: `models` (Firestore CRUD), `config` (GCP project), `tracking` (status transitions)
 - **Does not depend on**: LLM, Discovery, Application, or Profile modules directly
 - **Used by**: End users via browser (frontend), other services via REST API
 - The frontend accesses the database directly; the REST API is an independent interface

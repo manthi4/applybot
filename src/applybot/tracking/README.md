@@ -56,7 +56,7 @@ Email classification maps to: `received`, `rejected`, `interview`, `offer`.
 
 ## Boundaries
 
-- **Depends on**: `models` (Application, ApplicationStatus, ApplicationStatusUpdate ORM), `llm` (Gmail email classification), `config` (Google credentials)
+- **Depends on**: `models` (Application, ApplicationStatus, ApplicationStatusUpdate), `llm` (Gmail email classification), `config` (Google credentials)
 - **Does not depend on**: Discovery, Application (prep), Profile, or Dashboard
 - **Used by**: Dashboard (displays status), CLI/scheduler entry points
 - Gmail integration requires Google OAuth2 credentials (setup not yet automated)

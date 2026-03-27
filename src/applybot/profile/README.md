@@ -50,7 +50,7 @@ Parses the resume, extracts name/summary/skills/experiences/education sections, 
 
 ## Boundaries
 
-- **Depends on**: `models` (UserProfile ORM), `config` (database URL)
+- **Depends on**: `models` (UserProfile + Firestore CRUD), `config` (GCP project)
 - **Does not depend on**: LLM, Discovery, Application, or Tracking
 - **Used by**: Discovery (query building, relevance ranking), Application (resume tailoring, Q&A), Dashboard (profile display/edit)
 - ProfileManager owns all DB access for the UserProfile table

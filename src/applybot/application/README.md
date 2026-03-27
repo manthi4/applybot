@@ -60,7 +60,7 @@ class ProfileGap:
 
 ## Boundaries
 
-- **Depends on**: `models` (Job, Application ORM), `llm` (all content generation), `profile` (user profile + resume parsing/generation), `config`
+- **Depends on**: `models` (Job, Application), `llm` (all content generation), `profile` (user profile + resume parsing/generation), `config`
 - **Does not depend on**: Discovery, Tracking, or Dashboard
 - **Used by**: CLI/scheduler entry points, Dashboard (via DB)
 - The preparer writes Application records to the database; tailor and answerer are stateless
