@@ -68,34 +68,45 @@ terraform output artifact_registry
 
 ## 4. Build and Push Docker Image
 
+The recommended way is to trigger the Docker GitHub Actions workflow, which builds,
+tags, pushes, and deploys to Cloud Run automatically:
+
+```bash
+# Trigger via GitHub Actions (push to main with --docker in commit message)
+git commit -m "initial deploy --docker"
+git push
+
+# Or trigger manually
+gh workflow run docker.yml
+```
+
+To do it manually (e.g. for a first deploy before CI is configured):
+
 ```bash
 # From the project root directory
-cd ..
-
-# Configure Docker to authenticate with Artifact Registry
 gcloud auth configure-docker us-central1-docker.pkg.dev
 
-# Build the image
-docker build -t applybot .
-
-# Tag for Artifact Registry (use the registry URL from terraform output)
 REGISTRY=$(cd infra && terraform output -raw artifact_registry)
-docker tag applybot ${REGISTRY}/applybot:v1
-
-# Push
-docker push ${REGISTRY}/applybot:v1
+docker build -t applybot .
+docker tag applybot ${REGISTRY}/applybot:latest
+docker push ${REGISTRY}/applybot:latest
 ```
 
 ## 5. Deploy to Cloud Run
 
-After pushing the image, Terraform can deploy it (if the image tag matches `var.image_tag`):
+Cloud Run is deployed automatically at the end of the Docker workflow via `gcloud run deploy`.
+Terraform only provisions the service on initial `terraform apply` — subsequent image updates
+do not require Terraform.
+
+To manually deploy a specific image:
 
 ```bash
-cd infra
-terraform apply   # Will update Cloud Run to use the pushed image
+REGISTRY=$(cd infra && terraform output -raw artifact_registry)
+gcloud run deploy applybot \
+  --image ${REGISTRY}/applybot:latest \
+  --region us-central1 \
+  --project your-project-id
 ```
-
-Or if the image tag was already set correctly during `terraform apply`, Cloud Run will pull it on next revision.
 
 ## 6. Verify
 
@@ -113,19 +124,29 @@ open $(terraform output -raw dashboard_url)
 
 ## 7. Deploying Updates
 
+Push a new image and redeploy Cloud Run by triggering the Docker workflow:
+
 ```bash
-# Build new image
-docker build -t applybot .
+# Via commit message trigger
+git commit -m "fix bug --docker"
+git push
 
-# Tag with new version
+# Or manually
+gh workflow run docker.yml
+```
+
+The workflow will:
+1. Build and push the image tagged as `:latest` and `:{short-sha}`
+2. Run `gcloud run deploy` to create a new Cloud Run revision
+
+To roll back to a previous build, redeploy using its short SHA tag:
+
+```bash
 REGISTRY=$(cd infra && terraform output -raw artifact_registry)
-docker tag applybot ${REGISTRY}/applybot:v2
-docker push ${REGISTRY}/applybot:v2
-
-# Update Terraform variable and apply
-cd infra
-# Update image_tag in terraform.tfvars to "v2"
-terraform apply
+gcloud run deploy applybot \
+  --image ${REGISTRY}/applybot:<short-sha> \
+  --region us-central1 \
+  --project your-project-id
 ```
 
 ## 8. Local Development (Docker)
@@ -193,7 +214,6 @@ Two workflows automate Terraform and Docker deployments.
    | Variable | Default | Description |
    |----------|---------|-------------|
    | `GCP_REGION` | `us-central1` | GCP region |
-   | `IMAGE_TAG` | `latest` | Default image tag for Terraform |
 
 ### Usage
 
@@ -202,13 +222,12 @@ Two workflows automate Terraform and Docker deployments.
 gh workflow run terraform.yml                    # plan + apply
 gh workflow run terraform.yml -f action=plan     # plan only
 
-# Docker — manual triggers
-gh workflow run docker.yml                       # tag = short SHA
-gh workflow run docker.yml -f image_tag=v2       # custom tag
+# Docker — manual trigger (builds, pushes :latest + :{short-sha}, deploys to Cloud Run)
+gh workflow run docker.yml
 
 # Commit-message triggers (push to main)
 git commit -m "update infra --tf-apply"          # runs terraform apply
-git commit -m "fix bug --docker"                 # builds & pushes Docker image
+git commit -m "fix bug --docker"                 # builds, pushes & deploys Docker image
 ```
 
 ## 10. Tear Down

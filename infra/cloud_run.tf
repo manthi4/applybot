@@ -21,12 +21,6 @@ locals {
   image_uri = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.applybot.repository_id}/applybot:${var.image_tag}"
 }
 
-resource "null_resource" "image_tag_tracker" {
-  triggers = {
-    image_tag = var.image_tag
-  }
-}
-
 resource "google_cloud_run_v2_service" "applybot" {
   name     = "applybot"
   location = var.region
@@ -105,11 +99,12 @@ resource "google_cloud_run_v2_service" "applybot" {
     google_project_service.services,
     google_project_iam_member.cloud_run_firestore,
     google_project_iam_member.cloud_run_secrets,
-    null_resource.image_tag_tracker,
   ]
 
   lifecycle {
-    replace_triggered_by = [null_resource.image_tag_tracker]
+    # Image updates are deployed via gcloud run deploy in the Docker workflow.
+    # Terraform manages service config only; ignore image changes to prevent drift.
+    ignore_changes = [template[0].containers[0].image]
   }
 }
 
