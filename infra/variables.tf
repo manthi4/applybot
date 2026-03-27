@@ -27,3 +27,9 @@ variable "image_tag" {
   type        = string
   default     = "latest"
 }
+
+variable "dashboard_totp_secret" {
+  description = "Base32 TOTP secret for dashboard auth (generate with: python -c 'import pyotp; print(pyotp.random_base32())')"
+  type        = string
+  sensitive   = true
+}

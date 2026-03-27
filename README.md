@@ -1,6 +1,6 @@
 # ApplyBot
 
-A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, Firestore for persistence, paid aggregator APIs for scraping, Anthropic SDK for AI, and a FastHTML + FastAPI dashboard.
+A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, Firestore for persistence, paid aggregator APIs for scraping, Anthropic SDK for AI, and a FastHTML dashboard.
 
 ---
 
@@ -20,7 +20,7 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 2. **Discovery** — Searches multiple job boards daily using LLM-generated queries, deduplicates results with fuzzy matching, and uses Claude to rank jobs by relevance to your profile (0-100 score with reasoning).
 3. **Application** — For each approved job, tailors your resume (rephrase/reorder only — never fabricate), drafts answers to common application questions, generates a cover letter, and flags any profile gaps that need human input. Creates an Application record for review.
 4. **Tracking** — Manages application lifecycle through a validated state machine (DRAFT → READY_FOR_REVIEW → APPROVED → SUBMITTED → RECEIVED → INTERVIEW/OFFER/REJECTED). Scans Gmail to auto-detect status updates from applied-to companies.
-5. **Dashboard** — FastHTML UI + FastAPI REST API for reviewing job queue, managing applications, editing profile, and viewing pipeline statistics.
+5. **Dashboard** — FastHTML UI for reviewing job queue, managing applications, editing profile, and viewing pipeline statistics. Protected by TOTP authentication.
 6. **Scheduler** — GCP Cloud Functions triggered by Cloud Scheduler for automated daily execution.
 
 **Human-in-the-loop**: The agent prepares everything, but never submits without explicit approval. Safety guardrail: the agent never submits without explicit approval.
@@ -34,7 +34,6 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 | Language | Python 3.12+ | black/ruff/mypy configured |
 | LLM | Anthropic Claude (direct SDK) | Sonnet for cost-efficient tasks, Opus for complex reasoning; no LangChain |
 | Database | Google Cloud Firestore | Serverless NoSQL document database; schema-less, no migrations needed |
-| API | FastAPI | Internal API + dashboard backend; auto-generated OpenAPI spec |
 | Frontend | FastHTML + PicoCSS + HTMX | Lightweight Python-native UI; no JS build step |
 | Job Scraping | SerpAPI, Greenhouse API, Lever API, lxml | Paid aggregator + free public APIs |
 | Resume | python-docx | Parse and generate .docx preserving formatting |
@@ -66,7 +65,7 @@ applybot/
 │   │   └── scrapers/       # Pluggable scraper implementations
 │   ├── application/        # Resume tailoring + Q&A + cover letters
 │   ├── tracking/           # State machine + Gmail integration
-│   └── dashboard/          # FastHTML UI + FastAPI REST API
+│   └── dashboard/          # FastHTML UI (TOTP-authenticated)
 ├── scheduler/              # GCP Cloud Function entry points (planned)
 └── tests/                  # pytest suite
 ```
@@ -81,8 +80,9 @@ Each component under `src/applybot/` has its own README describing its purpose, 
 
 ```
 ┌─────────────────────────────────────────────┐
-│       Dashboard (FastHTML + FastAPI)          │
-│  REST API for jobs, apps, profile, summary   │
+│         Dashboard (FastHTML)                  │
+│  TOTP-authenticated UI for jobs, apps,       │
+│  profile, and pipeline statistics            │
 └──────────────┬──────────────────────────────┘
                │
 ┌──────────────┴──────────────────────────────┐
@@ -274,28 +274,13 @@ Every transition creates an `ApplicationStatusUpdate` audit record with source (
 
 ### Dashboard (`dashboard/`)
 
-**FastAPI Backend** — REST endpoints:
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/jobs` | List jobs (filter by status, min_score; limit ≤ 500) |
-| GET | `/jobs/{id}` | Job details + match reasoning |
-| POST | `/jobs/{id}/approve` | Mark job for application preparation |
-| POST | `/jobs/{id}/skip` | Skip a job |
-| GET | `/applications` | List applications (filter by status; limit ≤ 500) |
-| GET | `/applications/{id}` | Application details + materials |
-| POST | `/applications/{id}/review` | Approve/reject/edit application |
-| GET | `/profile` | Current user profile |
-| PUT | `/profile` | Update profile fields |
-| GET | `/dashboard/summary` | Stats: job/application counts by status |
-
-OpenAPI spec is auto-generated — other modules can use this API programmatically.
-
 **FastHTML Frontend** — Pages:
 - **Overview** (`/`) — Stats cards, pipeline progress bars, application status breakdown
 - **Job Queue** (`/jobs`) — Filterable job list with HTMX-powered approve/skip actions
 - **Applications** (`/apps`) — Applications by status with cover letter, answers, review actions
 - **Profile** (`/profile`) — Name/email/summary form + full profile JSON display
+
+**Authentication** — All routes except `/healthz` are protected by TOTP. Set `DASHBOARD_TOTP_SECRET` (Base32 secret) to enable. Run `applybot setup-auth` to generate a secret and scan the QR code with any authenticator app. Sessions last 24 hours (signed cookie).
 
 ---
 
@@ -374,7 +359,7 @@ pytest
 ### Infrastructure
 
 - **Database**: Google Cloud Firestore (FIRESTORE_NATIVE mode). Serverless, no provisioning or connection pools.
-- **Dashboard**: GCP Cloud Run (FastHTML + FastAPI), scales 0–1
+- **Dashboard**: GCP Cloud Run (FastHTML), scales 0–1
 - **Secrets**: GCP Secret Manager for API keys
 - **Auth**: Service account with `roles/datastore.user` for Firestore access
 - **Scheduling**: Cloud Scheduler cron jobs
@@ -460,7 +445,7 @@ Resume tailoring agent (with honesty guardrail), question answerer, cover letter
 Application tracker state machine, Gmail integration with email classification.
 
 ### Phase 6: Dashboard ✅
-FastAPI REST API (10 endpoints), FastHTML frontend (4 pages, PicoCSS + HTMX).
+FastHTML frontend (4 pages, PicoCSS + HTMX), TOTP session authentication.
 
 ### Phase 7: Cloud Deployment 🔧
 GCP Cloud Run, Firestore, Secret Manager, Artifact Registry — Terraform IaC ready. GitHub Actions CI/CD workflows for Terraform and Docker. Cloud Scheduler configured.

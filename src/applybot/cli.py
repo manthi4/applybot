@@ -36,24 +36,6 @@ def serve(host: str, port: int | None, reload: bool) -> None:
     run_dashboard(host=host, port=port or settings.port, reload=reload)
 
 
-@cli.command("serve-api")
-@click.option("--host", default="127.0.0.1", help="Host to bind to")
-@click.option("--port", default=None, type=int, help="Port to bind to")
-@click.option("--reload", is_flag=True, help="Enable auto-reload for development")
-def serve_api(host: str, port: int | None, reload: bool) -> None:
-    """Start the FastAPI REST API server."""
-    import uvicorn
-
-    from applybot.config import settings
-
-    uvicorn.run(
-        "applybot.dashboard.api:app",
-        host=host,
-        port=port or settings.port,
-        reload=reload,
-    )
-
-
 @cli.command("bootstrap-profile")
 @click.argument("resume_path", type=click.Path(exists=True))
 @click.option("--name", default=None, help="Override name from resume")
@@ -138,3 +120,39 @@ def run_discovery_cmd(location: str, max_results: int | None) -> None:
         click.echo("\nTop matches:")
         for match in result.top_matches[:5]:
             click.echo(f"  [{match['score']}] {match['title']} @ {match['company']}")
+
+
+@cli.command("setup-auth")
+@click.option(
+    "--issuer", default="ApplyBot", help="Name shown in your authenticator app"
+)
+def setup_auth(issuer: str) -> None:
+    """Print the TOTP secret and QR code URI for your authenticator app.
+
+    If DASHBOARD_TOTP_SECRET is not set, a new random secret is generated and
+    printed — copy it into your .env file and Secret Manager before using.
+    """
+    import pyotp
+
+    from applybot.config import settings
+
+    totp_secret = settings.dashboard_totp_secret
+    if not totp_secret:
+        totp_secret = pyotp.random_base32()
+        click.echo("No DASHBOARD_TOTP_SECRET found. Generated a new one:\n")
+        click.echo(f"  DASHBOARD_TOTP_SECRET={totp_secret}\n")
+        click.echo(
+            "  Add this to your .env file (local) and GCP Secret Manager (production).\n"
+        )
+
+    totp = pyotp.TOTP(totp_secret)
+    uri = totp.provisioning_uri(name="admin", issuer_name=issuer)
+
+    click.echo("Scan this URI with Google Authenticator, Authy, or any TOTP app:")
+    click.echo(f"\n  {uri}\n")
+    click.echo("Or open this URL in a browser to display a scannable QR code:")
+    click.echo(
+        f"  https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={uri}\n"
+    )
+    click.echo("Current code (valid for ~30 s):")
+    click.echo(f"  {totp.now()}")

@@ -70,6 +70,16 @@ resource "google_cloud_run_v2_service" "applybot" {
         }
       }
 
+      env {
+        name = "DASHBOARD_TOTP_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.dashboard_totp_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+
       startup_probe {
         http_get {
           path = "/healthz"
