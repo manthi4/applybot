@@ -29,25 +29,6 @@ resource "google_firestore_index" "jobs_status_score" {
   depends_on = [google_firestore_database.main]
 }
 
-# Composite index: jobs collection — relevance_score descending (for default listing)
-resource "google_firestore_index" "jobs_score_desc" {
-  project    = var.project_id
-  database   = google_firestore_database.main.name
-  collection = "jobs"
-
-  fields {
-    field_path = "relevance_score"
-    order      = "DESCENDING"
-  }
-
-  fields {
-    field_path = "__name__"
-    order      = "DESCENDING"
-  }
-
-  depends_on = [google_firestore_database.main]
-}
-
 # Composite index: applications — status + created_at (for filtered listing)
 resource "google_firestore_index" "apps_status_created" {
   project    = var.project_id
@@ -61,25 +42,6 @@ resource "google_firestore_index" "apps_status_created" {
 
   fields {
     field_path = "created_at"
-    order      = "DESCENDING"
-  }
-
-  depends_on = [google_firestore_database.main]
-}
-
-# Composite index: applications — created_at descending (for default listing)
-resource "google_firestore_index" "apps_created_desc" {
-  project    = var.project_id
-  database   = google_firestore_database.main.name
-  collection = "applications"
-
-  fields {
-    field_path = "created_at"
-    order      = "DESCENDING"
-  }
-
-  fields {
-    field_path = "__name__"
     order      = "DESCENDING"
   }
 
