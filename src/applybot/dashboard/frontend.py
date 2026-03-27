@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Awaitable, Callable
-from typing import Any
 
 import pyotp
 from fasthtml.common import (
@@ -20,9 +18,10 @@ from fasthtml.common import (
     RedirectResponse,
     fast_app,
 )
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse
+from starlette.responses import PlainTextResponse, Response
 from starlette.responses import RedirectResponse as StarletteRedirect
 
 from applybot.config import settings
@@ -48,21 +47,23 @@ _session_secret = (
 )
 
 
-@app.middleware("http")
-async def _require_auth(
-    request: Request,
-    call_next: Callable[[Request], Awaitable[Any]],
-) -> Any:
+class _AuthMiddleware(BaseHTTPMiddleware):
     """Redirect unauthenticated requests to /login. /healthz and /login are open."""
-    if request.url.path in ("/healthz", "/login"):
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        if request.url.path in ("/healthz", "/login"):
+            return await call_next(request)
+        if not request.session.get("authenticated"):
+            return StarletteRedirect("/login", status_code=303)
         return await call_next(request)
-    if not request.session.get("authenticated"):
-        return StarletteRedirect("/login", status_code=303)
-    return await call_next(request)
 
 
-# SessionMiddleware must be outermost so the session cookie is decoded before
-# _require_auth reads request.session. add_middleware: last added = outermost.
+# Middleware is applied in reverse add order: last added = outermost.
+# SessionMiddleware (outermost) decodes the cookie first, then _AuthMiddleware
+# can safely read request.session.
+app.add_middleware(_AuthMiddleware)
 app.add_middleware(
     SessionMiddleware,
     secret_key=_session_secret,
