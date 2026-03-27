@@ -80,12 +80,17 @@ ranked: list[tuple[RawJob, int, str]] = rank_jobs(jobs, profile)
 
 ### Cloud Function (GCP)
 
-Discovery runs as a **Cloud Functions Gen 2** function, triggered daily by Cloud Scheduler.
+Discovery runs as a **Cloud Functions Gen 2** HTTP function. It must be triggered manually — either via the CLI locally, or by sending an HTTP POST to the function URL in GCP.
 
 - **Entry point**: `handle_discovery` in `main.py` (project root)
 - **Runtime**: Python 3.12, 512Mi memory, 300s timeout
-- **Schedule**: Configurable via `discovery_schedule` Terraform variable (default: `0 8 * * *` — daily at 8:00 UTC)
 - **Terraform**: `infra/cloud_functions.tf`
+
+To invoke the deployed function manually via `gcloud`:
+
+```bash
+gcloud functions call applybot-discovery --region=us-central1
+```
 
 ### CLI (local)
 
