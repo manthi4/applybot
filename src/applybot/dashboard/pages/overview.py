@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from fasthtml.common import H1, Grid
+from fasthtml.common import H1, H2, Article, Button, Div, Grid, Span
 
-from applybot.dashboard.components import page, progress_table, stat_card
+from applybot.dashboard.components import alert, page, progress_table, stat_card
+from applybot.discovery.orchestrator import run_discovery
 from applybot.models.application import count_applications_by_status
 from applybot.models.job import count_jobs_by_status
+
+logger = logging.getLogger(__name__)
 
 PIPELINE_STAGES = ["new", "reviewing", "approved", "applied"]
 
@@ -45,6 +49,38 @@ def register(rt: Any) -> None:
                 ],
             )
 
-        return page(
-            H1("Dashboard Overview"), stats, pipeline, app_section, title="Overview"
+        actions_section = Article(
+            H2("Actions", cls="section-eyebrow"),
+            Div(
+                Span(cls="htmx-indicator staging-spinner", id="discover-spinner"),
+                Button(
+                    "Run Discovery Now",
+                    hx_post="/discover",
+                    hx_target="#discover-result",
+                    hx_swap="innerHTML",
+                    hx_indicator="#discover-spinner",
+                    cls="build-btn",
+                ),
+                cls="staging-header-right",
+            ),
+            Div(id="discover-result", cls="staging-result"),
         )
+
+        return page(
+            H1("Dashboard Overview"),
+            stats,
+            pipeline,
+            app_section,
+            actions_section,
+            title="Overview",
+        )
+
+    @rt("/discover", methods=["post"])
+    async def post_discover() -> object:
+        try:
+            result = await run_discovery()
+            msg = f"Found {result.total_scraped} jobs · {result.new_jobs_saved} new after deduplication"
+            return alert(msg, "success")
+        except Exception as e:
+            logger.exception("Discovery failed")
+            return alert(f"Discovery failed: {str(e)[:150]}", "error")
