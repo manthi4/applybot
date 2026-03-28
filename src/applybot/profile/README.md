@@ -49,10 +49,20 @@ Parsing is purely heuristic — no LLM is involved. Each format uses text extrac
 | Format | Extractor | Heading detection |
 |--------|-----------|-------------------|
 | `.docx` | `python-docx` | Word heading styles or short bold paragraphs |
-| `.pdf`  | `pypdf` text layer | ALL-CAPS lines or known section keywords |
+| `.pdf`  | `pypdf` layout extraction | ALL-CAPS lines or known section keywords (single- and multi-word) |
 | `.md`   | Built-in text read | ATX headings (`#`, `##`, `###`) |
 
 > ⚠️ PDF parsing only works on text-based PDFs. Scanned/image PDFs will yield poor results since there is no text layer to extract.
+
+**PDF heading detection (`_is_pdf_heading`)** uses the following heuristics in order:
+1. Normalise whitespace; reject lines longer than 60 characters.
+2. Reject lines that begin with bullet markers (`●`, `•`, `-`, `*`).
+3. Short ALL-CAPS lines (≥ 3 chars) are strong heading signals.
+4. Lines that *equal* or *start with* a known section keyword — including
+   multi-word variants like `"work experience"`, `"technical skills"`, and
+   `"relevant coursework"` — followed by whitespace, a colon, or end-of-string.
+5. Lines that *contain* a known multi-word phrase such as `"programming languages"`
+   (handles headings like "Familiar Programming Languages and Software").
 
 Sections are mapped to profile fields via `_map_resume_to_profile()` in `dashboard/pages/profile.py` by keyword matching: headings containing "skill/technologies/tools" → `skills`, "experience/employment/work history/career" → `experiences`, "education/academic/degree/university/school" → `education`.
 

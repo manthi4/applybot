@@ -134,7 +134,15 @@ def _map_resume_to_profile(parsed: ResumeData, profile: UserProfile) -> None:
 
         if any(
             kw in heading_lower
-            for kw in ("skill", "technologies", "tools", "tech stack", "competenc")
+            for kw in (
+                "skill",
+                "technologies",
+                "tools",
+                "tech stack",
+                "competenc",
+                "language",
+                "programming",
+            )
         ):
             if profile.skills is None:
                 profile.skills = {}
