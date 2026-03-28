@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     )
 
     # LLM (Vertex AI)
-    vertex_model_fast: str = "claude-sonnet-4-6-20260301"
-    vertex_model_smart: str = "claude-sonnet-4-6-20260301"
+    vertex_model_fast: str = "claude-sonnet-4-6"
+    vertex_model_smart: str = "claude-sonnet-4-6"
     vertex_max_retries: int = 3
     vertex_region: str = "us-east5"
 

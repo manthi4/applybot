@@ -237,13 +237,18 @@ def register(rt: Any) -> None:  # noqa: C901
         p = profile or UserProfile(name="")
 
         # Flash message
-        flash: Any = ""
+        flash_items: list[Any] = []
         if msg and msg in _FLASH_MESSAGES:
             text, kind = _FLASH_MESSAGES[msg]
-            flash = alert(text, kind)
+            flash_items.append(alert(text, kind))
         elif error and error in _FLASH_MESSAGES:
             text, kind = _FLASH_MESSAGES[error]
-            flash = alert(text, kind)
+            flash_items.append(alert(text, kind))
+
+        if p.enrichment_warning:
+            flash_items.append(alert(p.enrichment_warning, "error"))
+
+        flash: Any = Div(*flash_items) if flash_items else ""
 
         # ── Completeness ───────────────────────────────────────────
         filled = _count_filled(p)
@@ -487,6 +492,7 @@ def register(rt: Any) -> None:  # noqa: C901
                 profile = UserProfile(name="")
 
             profile.resume_path = object_name
+            profile.enrichment_warning = ""
 
             _map_resume_to_profile(parsed, profile)
 

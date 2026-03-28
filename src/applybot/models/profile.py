@@ -27,6 +27,7 @@ class UserProfile(BaseModel):
     education: list[Any] = Field(default_factory=list)
     preferences: dict[str, Any] = Field(default_factory=dict)
     resume_path: str = ""
+    enrichment_warning: str = ""
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def __repr__(self) -> str:

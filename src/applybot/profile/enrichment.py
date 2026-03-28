@@ -14,7 +14,7 @@ from pathlib import Path
 
 from applybot.config import settings
 from applybot.llm.client import llm
-from applybot.models.profile import UserProfile, save_profile
+from applybot.models.profile import UserProfile, save_profile, update_profile_fields
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,7 @@ def enrich_profile_with_llm(profile: UserProfile, resume_text: str) -> UserProfi
     # Always preserve identity/path fields and guard against a missing name
     updated.id = profile.id
     updated.resume_path = profile.resume_path
+    updated.enrichment_warning = ""
     if not updated.name:
         updated.name = profile.name
 
@@ -110,6 +111,15 @@ async def enrich_profile_with_llm_async(profile: UserProfile, resume_text: str) 
         await asyncio.to_thread(enrich_profile_with_llm, profile, resume_text)
     except Exception:
         logger.exception("LLM profile enrichment failed — profile unchanged")
+        try:
+            update_profile_fields(
+                enrichment_warning=(
+                    "We could not run AI profile enrichment after your resume upload. "
+                    "Your profile still includes the standard parsed resume data."
+                )
+            )
+        except Exception:
+            logger.exception("Failed to persist profile enrichment warning")
     finally:
         if task is not None:
             _background_tasks.discard(task)
