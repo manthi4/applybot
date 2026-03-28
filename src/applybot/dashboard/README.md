@@ -43,7 +43,7 @@ The frontend uses a modular architecture:
 1. **Overview** (`/`) — Stats cards, pipeline progress bars, application status breakdown
 2. **Job Queue** (`/jobs`) — Two-section layout:
    - **Staging Area** — Always-visible panel showing approved jobs queued for application generation, with a **"Build Approved Applications"** button that triggers `prepare_all_approved()` via HTMX. Shows a loading spinner during the (potentially slow) LLM call.
-   - **Browse Jobs** — Filterable job list (defaults to NEW) with HTMX-powered approve/skip actions. Approving a job moves it into the staging area immediately.
+   - **Browse Jobs** — Filterable job list (defaults to NEW) with HTMX-powered approve/skip actions. Compact inline approve/skip buttons sit on the right side of each job tile header. Approving or skipping a job uses OOB swaps to refresh both the staging area and the browse list in one response.
 3. **Applications** (`/apps`) — Applications by status with cover letter, answers, and review actions
 4. **Profile** (`/profile`) — Full profile editor with multiple sections:
    - **Basic Info**: Edit name, email, summary

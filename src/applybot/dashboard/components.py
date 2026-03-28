@@ -148,7 +148,9 @@ def status_badge(status_str: str) -> Span:
 # ---------- Forms ----------
 
 
-def filter_form(action: str, filters: list[dict[str, Any]]) -> Form:
+def filter_form(
+    action: str, filters: list[dict[str, Any]], form_id: str | None = None
+) -> Form:
     """Build a filter form with a grid of controls and a submit button.
 
     Each filter dict has keys:
@@ -185,7 +187,10 @@ def filter_form(action: str, filters: list[dict[str, Any]]) -> Form:
                 )
             )
     fields.append(Div(Label(NotStr("&nbsp;")), Button("Filter", type="submit")))
-    return Form(Grid(*fields), method="get", action=action)
+    form_kwargs: dict[str, Any] = {"method": "get", "action": action}
+    if form_id:
+        form_kwargs["id"] = form_id
+    return Form(Grid(*fields), **form_kwargs)
 
 
 # ---------- Cards ----------
