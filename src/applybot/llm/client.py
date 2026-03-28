@@ -3,6 +3,7 @@ import logging
 from typing import Any, TypeVar, cast
 
 import anthropic
+from anthropic import AnthropicVertex
 from pydantic import BaseModel
 
 from applybot.config import settings
@@ -16,9 +17,10 @@ class LLMClient:
     """Thin wrapper around the Anthropic SDK with tool-use and structured output."""
 
     def __init__(self) -> None:
-        self._client = anthropic.Anthropic(
-            api_key=settings.anthropic_api_key,
-            max_retries=settings.anthropic_max_retries,
+        self._client = AnthropicVertex(
+            project_id=settings.gcp_project_id,
+            region=settings.vertex_region,
+            max_retries=settings.vertex_max_retries,
         )
 
     def complete(
@@ -31,7 +33,7 @@ class LLMClient:
         temperature: float = 0.0,
     ) -> str:
         """Simple text completion — returns the assistant's text response."""
-        model = model or settings.anthropic_model_fast
+        model = model or settings.vertex_model_fast
         messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
         kwargs: dict[str, Any] = {
             "model": model,
@@ -86,7 +88,7 @@ class LLMClient:
     ) -> anthropic.types.Message:
         """Send a message with tool definitions, returning the full Message
         so callers can inspect tool_use blocks and continue the conversation."""
-        model = model or settings.anthropic_model_fast
+        model = model or settings.vertex_model_fast
         kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": max_tokens,

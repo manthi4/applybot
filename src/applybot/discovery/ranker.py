@@ -128,7 +128,7 @@ Consider: skill match, experience relevance, seniority level, industry fit, loca
         prompt,
         BatchScoreResult,
         system="You are an expert recruiter matching candidates to jobs. Be calibrated: most jobs should score 30-70, only truly exceptional matches above 85.",
-        model=settings.anthropic_model_fast,
+        model=settings.vertex_model_fast,
     )
 
     scored: list[tuple[RawJob, int, str]] = []

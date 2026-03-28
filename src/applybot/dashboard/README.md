@@ -96,6 +96,6 @@ The FastHTML app (`applybot serve`) is hosted on **GCP Cloud Run**:
 ### Secrets
 
 All sensitive config is stored in GCP Secret Manager and mounted as environment variables in Cloud Run:
-- `ANTHROPIC_API_KEY`
+- `VERTEX_REGION`
 - `SERPAPI_KEY`
 - `GOOGLE_APPLICATION_CREDENTIALS` (Gmail OAuth)

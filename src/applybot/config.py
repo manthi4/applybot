@@ -8,11 +8,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # LLM
-    anthropic_api_key: str = ""
-    anthropic_model_fast: str = "claude-sonnet-4-20250514"
-    anthropic_model_smart: str = "claude-sonnet-4-20250514"
-    anthropic_max_retries: int = 3
+    # LLM (Vertex AI)
+    vertex_model_fast: str = "claude-sonnet-4-6-20260301"
+    vertex_model_smart: str = "claude-sonnet-4-6-20260301"
+    vertex_max_retries: int = 3
+    vertex_region: str = "us-east5"
 
     # Job scraping
     serpapi_key: str = ""

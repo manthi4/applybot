@@ -129,7 +129,7 @@ Create a tailoring plan:
         prompt,
         TailoringPlan,
         system="You are an expert resume writer. You tailor resumes to specific jobs while maintaining complete honesty. You NEVER fabricate information.",
-        model=settings.anthropic_model_smart,
+        model=settings.vertex_model_smart,
         max_tokens=4096,
     )
 

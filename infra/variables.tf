@@ -9,12 +9,6 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "anthropic_api_key" {
-  description = "Anthropic API key"
-  type        = string
-  sensitive   = true
-}
-
 variable "serpapi_key" {
   description = "SerpAPI key"
   type        = string

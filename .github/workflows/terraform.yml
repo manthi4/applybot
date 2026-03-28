@@ -26,7 +26,6 @@ concurrency:
 env:
   TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
   TF_VAR_region: ${{ vars.GCP_REGION || 'us-central1' }}
-  TF_VAR_anthropic_api_key: ${{ secrets.TF_VAR_ANTHROPIC_API_KEY }}
   TF_VAR_serpapi_key: ${{ secrets.TF_VAR_SERPAPI_KEY }}
   TF_VAR_image_tag: ${{ github.event.inputs.image_tag || 'latest' }}
   TF_VAR_dashboard_totp_secret: ${{ secrets.TF_VAR_DASHBOARD_TOTP_SECRET }}
