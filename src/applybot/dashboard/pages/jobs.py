@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fasthtml.common import H1, H4, A, Article, Button, Div, P, Small, Span
+from fasthtml.common import H1, H4, A, Article, Button, Div, NotStr, P, Small, Span
 
 from applybot.application.preparer import prepare_all_approved
 from applybot.dashboard.components import (
@@ -46,13 +46,25 @@ def _build_staging_card(job: Job) -> Div:
             Div(job.title, cls="staging-card-title"),
             Div(job.company, cls="staging-card-company"),
         ),
-        _score_chip(job.relevance_score),
+        Div(
+            _score_chip(job.relevance_score),
+            Button(
+                "✕",
+                hx_post=f"/jobs/{job.id}/unapprove",
+                hx_target="#staging-area",
+                hx_swap="outerHTML",
+                hx_confirm=f"Remove '{job.title}' from staging? It will return to New.",
+                cls="staging-remove-btn",
+                title="Remove from staging",
+            ),
+            style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0",
+        ),
         cls="staging-card",
         id=f"staging-{job.id}",
     )
 
 
-def _build_staging_area(approved_jobs: list[Job]) -> Div:
+def _build_staging_area(approved_jobs: list[Job], *, oob: bool = False) -> Div:
     """Staging area showing approved jobs queued for LLM application generation."""
     count = len(approved_jobs)
     count_badge_cls = (
@@ -62,7 +74,7 @@ def _build_staging_area(approved_jobs: list[Job]) -> Div:
     if count == 0:
         body = Div(
             Span(
-                "No approved jobs waiting. Use ✓ Approve on jobs below to queue them here.",
+                "No approved jobs waiting. Use Approve on jobs below to queue them here.",
                 cls="staging-empty-msg",
             ),
             cls="staging-body",
@@ -73,17 +85,22 @@ def _build_staging_area(approved_jobs: list[Job]) -> Div:
             cls="staging-body staging-grid",
         )
 
+    est_mins = max(1, count * 2)
     confirm_msg = (
-        f"Build applications for {count} approved job{'s' if count != 1 else ''}? "
-        "This will call the LLM for each one."
+        f"Build applications for {count} job{'s' if count != 1 else ''}? "
+        f"~{est_mins} min estimated (3 LLM calls per job)."
         if count > 0
         else None
     )
 
+    extra_kwargs: dict[str, Any] = {}
+    if oob:
+        extra_kwargs["hx_swap_oob"] = "outerHTML"
+
     return Div(
         Div(
             Div(
-                Span("⚡ Staging Area", cls="section-eyebrow"),
+                Span("Staging Area", cls="section-eyebrow"),
                 Span(
                     f"{count} job{'s' if count != 1 else ''} queued",
                     cls=count_badge_cls,
@@ -110,6 +127,7 @@ def _build_staging_area(approved_jobs: list[Job]) -> Div:
         Div(id="build-result", cls="staging-result"),
         cls="staging-area",
         id="staging-area",
+        **extra_kwargs,
     )
 
 
@@ -147,7 +165,7 @@ def _build_job_card(job: Job) -> Article:
     if job.url:
         meta_parts.append(
             P(
-                A("View Job Posting ↗", href=job.url, target="_blank"),
+                A("View Job Posting", href=job.url, target="_blank"),
                 style="margin:0.4rem 0 0;font-size:0.88rem",
             )
         )
@@ -156,7 +174,7 @@ def _build_job_card(job: Job) -> Article:
     if job.status == JobStatus.NEW:
         actions.append(
             action_buttons(
-                ("✓ Approve", f"/jobs/{job.id}/approve", f"#job-{job.id}", ""),
+                ("Approve", f"/jobs/{job.id}/approve", f"#job-{job.id}", ""),
                 ("Skip", f"/jobs/{job.id}/skip", f"#job-{job.id}", "secondary"),
             )
         )
@@ -246,18 +264,34 @@ def register(rt: Any) -> None:
             results = prepare_all_approved()
             n = len(results)
             if n == 0:
-                return alert("No approved jobs found to build.", "info")
-            total_gaps = sum(len(gaps) for _, gaps in results)
-            msg = f"Built {n} application{'s' if n != 1 else ''} — now in the review queue."
-            if total_gaps:
-                msg += f" {total_gaps} profile gap{'s' if total_gaps != 1 else ''} flagged."
-            return alert(msg, "success")
+                result_alert = alert("No approved jobs found to build.", "info")
+            else:
+                total_gaps = sum(len(gaps) for _, gaps in results)
+                msg = f"Built {n} application{'s' if n != 1 else ''} — now in the review queue."
+                if total_gaps:
+                    msg += f" {total_gaps} profile gap{'s' if total_gaps != 1 else ''} flagged."
+                result_alert = alert(msg, "success")
         except ValueError as e:
             logger.exception("Build approved: profile error")
-            return alert(f"Profile error: {e}", "error")
+            result_alert = alert(f"Profile error: {e}", "error")
         except Exception as e:
             logger.exception("Build approved: unexpected error")
-            return alert(f"Unexpected error: {str(e)[:150]}", "error")
+            result_alert = alert(f"Unexpected error: {str(e)[:150]}", "error")
+
+        # OOB-refresh staging area (approved jobs are now in REVIEWING)
+        new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
+        oob = _build_staging_area(new_approved, oob=True)
+        return NotStr(str(result_alert) + str(oob))
+
+    @rt("/jobs/{job_id}/unapprove")
+    def post_unapprove(job_id: str) -> object:
+        """Return an approved job back to NEW, removing it from the staging area."""
+        job = get_job(job_id)
+        if job is None:
+            return alert("Job not found.", "error")
+        update_job(job_id, status=JobStatus.NEW)
+        new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
+        return _build_staging_area(new_approved)
 
     @rt("/jobs/{job_id}/approve")
     def post(job_id: str) -> object:
@@ -267,12 +301,16 @@ def register(rt: Any) -> None:
         if job.status != JobStatus.NEW:
             return alert(f"Job is {job.status.value}, not new.", "error")
         update_job(job_id, status=JobStatus.APPROVED)
-        return confirmed_card(
+        card = confirmed_card(
             "job",
             job.id,
             f"{job.title} at {job.company}",
             "Approved — added to staging",
         )
+        # OOB-refresh staging area so the new tile appears immediately
+        new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
+        oob = _build_staging_area(new_approved, oob=True)
+        return NotStr(str(card) + str(oob))
 
     @rt("/jobs/{job_id}/skip")
     def post_skip(job_id: str) -> object:

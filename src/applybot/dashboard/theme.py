@@ -498,6 +498,27 @@ article[role="alert"]  { border-left: 3px solid var(--red); }
     font-weight: 600;
 }
 
+/* ── Nav badge ─────────────────────────────────────────────────── */
+nav a { position: relative; }
+.nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.1em;
+    padding: 0 0.3em;
+    height: 1.1em;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 1;
+    background: var(--red-hi);
+    color: #fff;
+    margin-left: 0.3em;
+    vertical-align: middle;
+    letter-spacing: 0;
+    box-shadow: 0 0 6px rgba(196,56,56,0.45);
+}
+
 /* ── Section eyebrow label ─────────────────────────────────────── */
 .section-eyebrow {
     font-size: 0.68rem;
@@ -654,6 +675,95 @@ article[role="alert"]  { border-left: 3px solid var(--red); }
     font-size: 0.875rem;
     color: var(--text);
     line-height: 1.5;
+}
+
+/* ── Staging remove button ─────────────────────────────────────── */
+.staging-remove-btn {
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3rem;
+    height: 1.3rem;
+    border-radius: 50%;
+    font-size: 0.65rem;
+    color: var(--text-3);
+    background: transparent;
+    border: 1px solid transparent !important;
+    transition: color 0.15s var(--ease), background 0.15s var(--ease);
+    flex-shrink: 0;
+    padding: 0 !important;
+    margin: 0 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+.staging-remove-btn:hover {
+    color: var(--red-hi) !important;
+    background: rgba(140,28,28,0.12) !important;
+    border-color: rgba(140,28,28,0.2) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ── Profile gap section (on /apps cards) ──────────────────────── */
+.gap-section {
+    background: rgba(234,179,8,0.04);
+    border: 1px solid rgba(234,179,8,0.18);
+    border-radius: var(--r-sm);
+    padding: 0.75rem 0.9rem;
+    margin: 0.75rem 0 0.25rem;
+}
+.gap-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+}
+.gap-header-label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #fbbf24;
+}
+.gap-header-sub {
+    font-size: 0.78rem;
+    color: var(--text-2);
+}
+.gap-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding: 0.3rem 0;
+    border-top: 1px solid rgba(234,179,8,0.1);
+}
+.gap-item:first-of-type { border-top: none; }
+.gap-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 50%;
+    background: rgba(234,179,8,0.12);
+    color: #fbbf24;
+    font-size: 0.65rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+}
+.gap-question {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.4;
+}
+.gap-context {
+    font-size: 0.78rem;
+    color: var(--text-2);
+    margin-top: 0.1rem;
+    line-height: 1.4;
 }
 
 /* ── Browse section ────────────────────────────────────────────── */

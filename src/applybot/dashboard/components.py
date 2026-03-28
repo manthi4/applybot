@@ -44,12 +44,30 @@ from fasthtml.common import (
 
 
 def nav() -> Nav:
-    """Top navigation bar."""
+    """Top navigation bar with approved-jobs count badge on the Jobs link."""
+    approved_count = 0
+    try:
+        from applybot.models.job import count_jobs_by_status
+
+        approved_count = count_jobs_by_status().get("approved", 0)
+    except Exception:
+        pass
+
+    jobs_link = (
+        A(
+            "Jobs",
+            Span(str(approved_count), cls="nav-badge"),
+            href="/jobs",
+        )
+        if approved_count > 0
+        else A("Jobs", href="/jobs")
+    )
+
     return Nav(
         Ul(Li(Strong(A("ApplyBot", href="/")))),
         Ul(
             Li(A("Overview", href="/")),
-            Li(A("Jobs", href="/jobs")),
+            Li(jobs_link),
             Li(A("Applications", href="/apps")),
             Li(A("Profile", href="/profile")),
             Li(

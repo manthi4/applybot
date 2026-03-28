@@ -66,6 +66,7 @@ def prepare_application(
         tailored_resume_path=resume_path,
         cover_letter=cover_letter,
         answers=answers,
+        profile_gaps=[{"question": g.question, "context": g.context} for g in all_gaps],
         status=ApplicationStatus.READY_FOR_REVIEW,
     )
     application = add_application(application)
