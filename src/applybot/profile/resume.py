@@ -1,8 +1,20 @@
-"""Resume manager — parse and generate .docx resumes."""
+"""Resume manager — parse and generate .docx resumes.
+
+Supported input formats for parse_resume():
+  - .docx  — heuristic paragraph/heading extractor using python-docx
+  - .pdf   — text-layer extraction via pypdf (does not work for scanned PDFs)
+  - .md    — Markdown heading-based section extractor
+
+The upload workflow is heuristic-based (no LLM). Sections are inferred by
+keyword matching on heading text (see _map_resume_to_profile in
+dashboard/pages/profile.py). For richer extraction, an LLM post-processing
+step could be added in future.
+"""
 
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -75,6 +87,25 @@ def _is_heading(paragraph: Paragraph) -> bool:
 
 
 def parse_resume(path: Path) -> ResumeData:
+    """Parse a resume file into structured ResumeData.
+
+    Dispatches to the appropriate parser based on file extension:
+    - .docx  — heuristic paragraph/heading extractor
+    - .pdf   — text-layer extraction (text-based PDFs only)
+    - .md    — Markdown heading-based extractor
+    """
+    ext = path.suffix.lower()
+    if ext == ".docx":
+        return _parse_resume_docx(path)
+    elif ext == ".pdf":
+        return _parse_resume_pdf(path)
+    elif ext == ".md":
+        return _parse_resume_md(path)
+    else:
+        raise ValueError(f"Unsupported resume format: {ext!r}. Use .docx, .pdf, or .md")
+
+
+def _parse_resume_docx(path: Path) -> ResumeData:
     """Parse a .docx resume into structured ResumeData.
 
     Heuristic approach:
@@ -115,7 +146,150 @@ def parse_resume(path: Path) -> ResumeData:
             else:
                 data.summary = text
 
-    logger.info("Parsed resume: %s, %d sections", data.name, len(data.sections))
+    logger.info("Parsed resume (docx): %s, %d sections", data.name, len(data.sections))
+    return data
+
+
+def _parse_resume_pdf(path: Path) -> ResumeData:
+    """Parse a text-based PDF resume into structured ResumeData.
+
+    Uses pypdf for text extraction. This does NOT work for scanned/image PDFs.
+    Text lines are processed with the same heuristics as the docx parser:
+    short ALL-CAPS or title-cased lines are treated as section headings.
+    """
+    try:
+        from pypdf import PdfReader
+    except ImportError as e:
+        raise ImportError(
+            "pypdf is required to parse PDF resumes: pip install pypdf"
+        ) from e
+
+    reader = PdfReader(str(path))
+    lines: list[str] = []
+    for page in reader.pages:
+        text = page.extract_text() or ""
+        lines.extend(text.splitlines())
+
+    data = ResumeData()
+    current_section: ResumeSection | None = None
+    found_name = False
+
+    for raw_line in lines:
+        text = raw_line.strip()
+        if not text:
+            continue
+
+        if not found_name:
+            data.name = text
+            found_name = True
+            continue
+
+        if (
+            not data.contact_info
+            and current_section is None
+            and not _is_pdf_heading(text)
+        ):
+            data.contact_info = text
+            continue
+
+        if _is_pdf_heading(text):
+            current_section = ResumeSection(heading=text)
+            data.sections.append(current_section)
+        elif current_section is not None:
+            current_section.items.append(text)
+        else:
+            if data.summary:
+                data.summary += "\n" + text
+            else:
+                data.summary = text
+
+    logger.info("Parsed resume (pdf): %s, %d sections", data.name, len(data.sections))
+    return data
+
+
+def _is_pdf_heading(text: str) -> bool:
+    """Heuristic: short ALL-CAPS lines or common resume section keywords are headings."""
+    if len(text) > 80:
+        return False
+    if text.isupper() and len(text) > 2:
+        return True
+    _heading_keywords = (
+        "experience",
+        "education",
+        "skills",
+        "summary",
+        "objective",
+        "projects",
+        "certifications",
+        "awards",
+        "publications",
+        "languages",
+        "interests",
+        "references",
+        "employment",
+        "work history",
+        "career",
+        "technologies",
+        "tools",
+    )
+    lower = text.lower()
+    return any(lower == kw or lower.startswith(kw + " ") for kw in _heading_keywords)
+
+
+def _parse_resume_md(path: Path) -> ResumeData:
+    """Parse a Markdown resume into structured ResumeData.
+
+    Sections are delimited by ATX headings (# / ## / ###).
+    The first heading or first non-empty line is treated as the name.
+    """
+    content = path.read_text(encoding="utf-8")
+    lines = content.splitlines()
+
+    data = ResumeData()
+    current_section: ResumeSection | None = None
+    found_name = False
+
+    for raw_line in lines:
+        text = raw_line.strip()
+        if not text:
+            continue
+
+        heading_match = re.match(r"^#{1,3}\s+(.*)", text)
+        if heading_match:
+            heading_text = heading_match.group(1).strip()
+            if not found_name:
+                data.name = heading_text
+                found_name = True
+            else:
+                current_section = ResumeSection(heading=heading_text)
+                data.sections.append(current_section)
+            continue
+
+        # Strip inline markdown (bold, italic, links, code)
+        clean = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # links
+        clean = re.sub(
+            r"[*_`]{1,2}([^*_`]+)[*_`]{1,2}", r"\1", clean
+        )  # bold/italic/code
+        clean = re.sub(r"^[-*+]\s+", "", clean)  # list bullets
+
+        if not found_name:
+            data.name = clean
+            found_name = True
+            continue
+
+        if not data.contact_info and current_section is None:
+            data.contact_info = clean
+            continue
+
+        if current_section is not None:
+            current_section.items.append(clean)
+        else:
+            if data.summary:
+                data.summary += "\n" + clean
+            else:
+                data.summary = clean
+
+    logger.info("Parsed resume (md): %s, %d sections", data.name, len(data.sections))
     return data
 
 
