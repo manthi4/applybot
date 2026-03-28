@@ -41,7 +41,9 @@ The frontend uses a modular architecture:
 ### Pages
 
 1. **Overview** (`/`) — Stats cards, pipeline progress bars, application status breakdown
-2. **Job Queue** (`/jobs`) — Filterable job list with HTMX-powered approve/skip actions
+2. **Job Queue** (`/jobs`) — Two-section layout:
+   - **Staging Area** — Always-visible panel showing approved jobs queued for application generation, with a **"Build Approved Applications"** button that triggers `prepare_all_approved()` via HTMX. Shows a loading spinner during the (potentially slow) LLM call.
+   - **Browse Jobs** — Filterable job list (defaults to NEW) with HTMX-powered approve/skip actions. Approving a job moves it into the staging area immediately.
 3. **Applications** (`/apps`) — Applications by status with cover letter, answers, and review actions
 4. **Profile** (`/profile`) — Full profile editor with multiple sections:
    - **Basic Info**: Edit name, email, summary
@@ -54,7 +56,7 @@ The frontend uses a modular architecture:
 
    Routes: `GET /profile`, `POST /profile` (basic info), `GET /profile/resume` (download), `POST /profile/resume` (upload), `POST /profile/details` (skills/experiences/education/preferences)
 
-The frontend queries the database directly using Firestore CRUD functions from models. Interactive actions (approve, skip, status changes) use HTMX partial page swaps.
+The frontend queries the database directly using Firestore CRUD functions from models. Interactive actions (approve, skip, status changes, build) use HTMX partial page swaps.
 
 ### Authentication
 
@@ -86,7 +88,7 @@ python -m applybot serve
 
 ## Boundaries
 
-- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret), `tracking` (status transitions)
+- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret), `tracking` (status transitions), `application` (for the Build Approved Applications button)
 - **Does not depend on**: LLM, Discovery, Application, or Profile modules directly
 - **Used by**: End users via browser (authenticated with TOTP)
 
