@@ -33,3 +33,8 @@ htmlcov/
 .env
 .env.*
 !.env.example
+
+# Resume / CV files — contain personal data, never commit
+*.pdf
+CV_Resume.*
+data/resumes/

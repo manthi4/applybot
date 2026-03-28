@@ -153,9 +153,12 @@ def _parse_resume_docx(path: Path) -> ResumeData:
 def _parse_resume_pdf(path: Path) -> ResumeData:
     """Parse a text-based PDF resume into structured ResumeData.
 
-    Uses pypdf for text extraction. This does NOT work for scanned/image PDFs.
-    Text lines are processed with the same heuristics as the docx parser:
-    short ALL-CAPS or title-cased lines are treated as section headings.
+    Uses pypdf's layout-aware extraction (``extraction_mode="layout"``) which
+    preserves visual line separation far better than the default plain-text
+    mode.  Text lines are then whitespace-normalised and run through the same
+    heading heuristics as before.
+
+    This does NOT work for scanned / image-only PDFs.
     """
     try:
         from pypdf import PdfReader
@@ -167,7 +170,8 @@ def _parse_resume_pdf(path: Path) -> ResumeData:
     reader = PdfReader(str(path))
     lines: list[str] = []
     for page in reader.pages:
-        text = page.extract_text() or ""
+        # Layout mode preserves visual line structure much better than plain mode
+        text = page.extract_text(extraction_mode="layout") or ""
         lines.extend(text.splitlines())
 
     data = ResumeData()
@@ -175,7 +179,8 @@ def _parse_resume_pdf(path: Path) -> ResumeData:
     found_name = False
 
     for raw_line in lines:
-        text = raw_line.strip()
+        # Collapse multiple spaces (common in layout-mode output) to one space
+        text = re.sub(r" {2,}", " ", raw_line).strip()
         if not text:
             continue
 
@@ -208,12 +213,33 @@ def _parse_resume_pdf(path: Path) -> ResumeData:
 
 
 def _is_pdf_heading(text: str) -> bool:
-    """Heuristic: short ALL-CAPS lines or common resume section keywords are headings."""
-    if len(text) > 80:
+    """Heuristic: identify section headings in PDF-extracted text lines.
+
+    Checks (in order):
+    1. Normalize whitespace; reject empty or long lines (> 60 chars).
+    2. Reject lines that start with bullet markers (●, •, -, *).
+    3. ALL-CAPS lines with > 2 characters are strong heading signals.
+    4. Lines that equal, or start with, a known single- or multi-word
+       section-heading keyword (followed by space, colon, or end-of-string).
+    5. Lines that contain a known multi-word phrase as a substring (handles
+       headings like "Familiar Programming Languages and Software").
+    """
+    # Normalize runs of whitespace to a single space
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text or len(text) > 60:
         return False
+    # Bullet / list markers are never section headings
+    if re.match(r"^[●•\-\*]", text):
+        return False
+    # ALL-CAPS is a strong indicator (minimum 3 chars to avoid "ML", "AI", etc.)
     if text.isupper() and len(text) > 2:
         return True
+
+    # Known single- and multi-word section heading keywords.
+    # Detection rule: the normalised line *equals* the keyword OR *starts with*
+    # the keyword followed by whitespace, a colon, or end-of-string.
     _heading_keywords = (
+        # --- single-word headings ---
         "experience",
         "education",
         "skills",
@@ -227,13 +253,40 @@ def _is_pdf_heading(text: str) -> bool:
         "interests",
         "references",
         "employment",
-        "work history",
         "career",
         "technologies",
         "tools",
+        "coursework",
+        "qualifications",
+        "profile",
+        "activities",
+        "achievements",
+        # --- multi-word headings (checked as exact / prefix matches) ---
+        "work experience",
+        "professional experience",
+        "relevant experience",
+        "work history",
+        "technical skills",
+        "key skills",
+        "core skills",
+        "relevant coursework",
+        "professional summary",
+        "career summary",
+        "personal statement",
+        "volunteer experience",
     )
     lower = text.lower()
-    return any(lower == kw or lower.startswith(kw + " ") for kw in _heading_keywords)
+    for kw in _heading_keywords:
+        if lower == kw or re.match(rf"^{re.escape(kw)}[\s:,]", lower):
+            return True
+
+    # Substring match for multi-word phrases that may appear inside a longer
+    # heading (e.g. "Familiar Programming Languages and Software").
+    _phrase_substrings = (
+        "programming languages",
+        "languages and software",
+    )
+    return any(phrase in lower for phrase in _phrase_substrings)
 
 
 def _parse_resume_md(path: Path) -> ResumeData:
