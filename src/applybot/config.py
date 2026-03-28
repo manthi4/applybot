@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     # Google / GCP
     gcp_project_id: str = ""
+    gcs_bucket_name: str = ""  # GCS bucket for file storage (resumes, etc.)
 
     # Google / Gmail
     google_application_credentials: str = ""

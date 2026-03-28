@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -17,6 +18,7 @@ from applybot.profile.resume import (
     generate_resume,
     parse_resume,
 )
+from applybot.storage import download_file, file_exists, upload_file
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +46,8 @@ TailoringPlan.model_rebuild()
 def tailor_resume(
     job: Job,
     profile: UserProfile,
-    base_resume_path: Path | None = None,
-    output_dir: Path = Path("data/tailored"),
-) -> Path:
+    base_resume_object: str | None = None,
+) -> str:
     """Create a tailored resume for a specific job.
 
     Guardrail: The agent may ONLY rephrase/reorder existing content.
@@ -55,31 +56,47 @@ def tailor_resume(
     Args:
         job: The target job.
         profile: User profile with skills/experiences.
-        base_resume_path: Path to the base .docx resume.
-        output_dir: Directory for output files.
+        base_resume_object: GCS object name for the base resume.
 
     Returns:
-        Path to the generated tailored .docx resume.
+        GCS object name for the generated tailored .docx resume.
     """
-    # Parse the base resume
-    resume_path = base_resume_path or Path(profile.resume_path)
-    if not resume_path.exists():
-        raise FileNotFoundError(f"Base resume not found: {resume_path}")
+    object_name = base_resume_object or profile.resume_path
+    if not object_name or not file_exists(object_name):
+        raise FileNotFoundError(f"Base resume not found: {object_name}")
 
-    base_data = parse_resume(resume_path)
+    # Download base resume to a temp file for parsing (parse_resume needs a Path)
+    content = download_file(object_name)
+    ext = Path(object_name).suffix
 
-    # Get tailoring plan from Claude
-    plan = _get_tailoring_plan(job, profile, base_data)
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = Path(tmp.name)
 
-    # Apply the plan to create tailored resume data
-    tailored_data = _apply_plan(base_data, plan)
+    try:
+        base_data = parse_resume(tmp_path)
 
-    # Generate the .docx
-    output_path = output_dir / f"resume_{job.id}_{_slugify(job.company)}.docx"
-    generate_resume(tailored_data, resume_path, output_path)
+        # Get tailoring plan from Claude
+        plan = _get_tailoring_plan(job, profile, base_data)
 
-    logger.info("Tailored resume generated: %s", output_path)
-    return output_path
+        # Apply the plan to create tailored resume data
+        tailored_data = _apply_plan(base_data, plan)
+
+        # Generate the tailored .docx to another temp file
+        output_name = f"resumes/tailored/resume_{job.id}_{_slugify(job.company)}.docx"
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as out_tmp:
+            out_path = Path(out_tmp.name)
+
+        generate_resume(tailored_data, tmp_path, out_path)
+
+        # Upload the result to storage
+        upload_file(out_path.read_bytes(), output_name)
+        logger.info("Tailored resume generated: %s", output_name)
+        return output_name
+    finally:
+        tmp_path.unlink(missing_ok=True)
+        if "out_path" in locals():
+            out_path.unlink(missing_ok=True)
 
 
 def _get_tailoring_plan(
