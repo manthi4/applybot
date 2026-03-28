@@ -60,14 +60,8 @@ resource "google_cloudfunctions2_function" "discovery" {
     service_account_email = google_service_account.cloud_run.email
 
     environment_variables = {
-      GCP_PROJECT_ID = var.project_id
-    }
-
-    secret_environment_variables {
-      key        = "ANTHROPIC_API_KEY"
-      project_id = var.project_id
-      secret     = google_secret_manager_secret.anthropic_api_key.secret_id
-      version    = "latest"
+      GCP_PROJECT_ID  = var.project_id
+      VERTEX_REGION   = var.region
     }
 
     secret_environment_variables {

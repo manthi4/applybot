@@ -1,6 +1,6 @@
 # ApplyBot
 
-A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, Firestore for persistence, paid aggregator APIs for scraping, Anthropic SDK for AI, and a FastHTML dashboard.
+A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, Firestore for persistence, paid aggregator APIs for scraping, Vertex AI (Claude) for AI, and a FastHTML dashboard.
 
 ---
 
@@ -32,7 +32,7 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 | Layer | Technology | Notes |
 |---|---|---|
 | Language | Python 3.12+ | black/ruff/mypy configured |
-| LLM | Anthropic Claude (direct SDK) | Sonnet for cost-efficient tasks, Opus for complex reasoning; no LangChain |
+| LLM | Claude via Google Vertex AI | Claude Sonnet 4.6 via `anthropic[vertex]` SDK; no LangChain |
 | Database | Google Cloud Firestore | Serverless NoSQL document database; schema-less, no migrations needed |
 | Frontend | FastHTML + PicoCSS + HTMX | Lightweight Python-native UI; no JS build step |
 | Job Scraping | SerpAPI, Greenhouse API, Lever API, lxml | Paid aggregator + free public APIs |
@@ -59,7 +59,7 @@ applybot/
 ├── src/applybot/
 │   ├── config.py           # Pydantic Settings (env-based)
 │   ├── models/             # Pydantic models + Firestore CRUD (Job, Application, UserProfile)
-│   ├── llm/                # Anthropic Claude SDK wrapper
+│   ├── llm/                # Claude via Vertex AI SDK wrapper
 │   ├── profile/            # Profile CRUD + .docx resume parsing/generation
 │   ├── discovery/          # Multi-source job scraping + dedup + ranking
 │   │   └── scrapers/       # Pluggable scraper implementations
@@ -182,7 +182,7 @@ Stored as a singleton document (`"default"`) in the `profiles` collection.
 
 ### LLM Client (`llm/`)
 
-Thin wrapper around the Anthropic SDK providing three call patterns:
+Thin wrapper around the Anthropic Vertex AI SDK providing three call patterns:
 
 - **`complete(prompt, system, model, temperature)`** → `str` — Simple text completion
 - **`structured_output(prompt, output_type, system, model)`** → `T` — Returns a Pydantic model; auto-strips markdown code fences from JSON
@@ -290,7 +290,7 @@ Pydantic Settings, loading from environment variables or a `.env` file:
 
 ```env
 # Required
-ANTHROPIC_API_KEY=sk-ant-...
+GCP_PROJECT_ID=your-gcp-project-id
 SERPAPI_KEY=...
 
 # GCP Project (for Firestore; falls back to ADC)
@@ -306,10 +306,11 @@ DISCOVERY_MAX_JOBS_PER_RUN=100
 # Application limits
 MAX_APPLICATIONS_PER_DAY=10
 
-# LLM models
-ANTHROPIC_MODEL_FAST=claude-sonnet-4-20250514     # Cost-efficient tasks
-ANTHROPIC_MODEL_SMART=claude-sonnet-4-20250514    # Complex reasoning
-ANTHROPIC_MAX_RETRIES=3
+# LLM models (Vertex AI)
+VERTEX_MODEL_FAST=claude-sonnet-4-6-20260301     # Cost-efficient tasks
+VERTEX_MODEL_SMART=claude-sonnet-4-6-20260301    # Complex reasoning
+VERTEX_MAX_RETRIES=3
+VERTEX_REGION=us-east5                           # Vertex AI region for Claude
 ```
 
 ---
@@ -333,7 +334,7 @@ pytest
 
 | Decision | Rationale |
 |---|---|
-| Direct Anthropic SDK (no LangChain) | Simpler, fewer deps, more debuggable |
+| Claude via Vertex AI (no LangChain) | Better GCP integration, ADC auth, no separate API key needed |
 | Firestore (serverless NoSQL) | No DB server to manage or pay for; generous free tier, scales automatically |
 | Human-in-the-loop | Agent never submits without explicit approval |
 | Resume honesty guardrail | Tailoring can only rephrase/reorder, not fabricate |
@@ -391,7 +392,7 @@ git commit -m "update infra --tf-apply"
 git commit -m "fix bug --docker"
 ```
 
-**Required GitHub Secrets:** `GCP_SA_KEY`, `GCP_PROJECT_ID`, `TF_VAR_ANTHROPIC_API_KEY`, `TF_VAR_SERPAPI_KEY`.
+**Required GitHub Secrets:** `GCP_SA_KEY`, `GCP_PROJECT_ID`, `TF_VAR_SERPAPI_KEY`.
 **Optional GitHub Variables:** `GCP_REGION` (default: `us-central1`), `IMAGE_TAG` (default: `latest`).
 
 See [DEPLOY.md](DEPLOY.md) § "CI/CD with GitHub Actions" for full setup instructions (GCS bucket for Terraform state, CI service account creation, secrets configuration).
@@ -401,7 +402,7 @@ See [DEPLOY.md](DEPLOY.md) § "CI/CD with GitHub Actions" for full setup instruc
 ## Cost Considerations
 
 - **SerpAPI**: ~$50/month for 5,000 searches
-- **Claude API**: Costs depend on usage; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
+- **Claude via Vertex AI**: Costs depend on usage; billed through GCP; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
 - **Greenhouse/Lever APIs**: Free (public)
 - **Firestore**: Free tier (1 GiB storage + 50K reads/day) — essentially free at low usage
 - **GCP Cloud Functions**: Free tier covers light usage

@@ -36,7 +36,6 @@ Edit `terraform.tfvars` with your actual values:
 ```hcl
 project_id        = "applybot-prod"
 region            = "us-central1"
-anthropic_api_key = "sk-ant-..."
 serpapi_key        = ""
 image_tag         = "latest"
 ```
@@ -162,7 +161,6 @@ docker run -p 8000:8000 \
   -e GCP_PROJECT_ID="your-project-id" \
   -e GOOGLE_APPLICATION_CREDENTIALS="/app/credentials.json" \
   -v /path/to/credentials.json:/app/credentials.json:ro \
-  -e ANTHROPIC_API_KEY="sk-ant-..." \
   applybot
 ```
 
@@ -206,7 +204,6 @@ Two workflows automate Terraform and Docker deployments.
    |--------|-------------|
    | `GCP_SA_KEY` | Contents of `ci-key.json` |
    | `GCP_PROJECT_ID` | GCP project ID (e.g. `applybot-prod`) |
-   | `TF_VAR_ANTHROPIC_API_KEY` | Anthropic API key |
    | `TF_VAR_SERPAPI_KEY` | SerpAPI key (optional) |
 
 4. **Configure GitHub Variables** (optional overrides):

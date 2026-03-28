@@ -17,6 +17,13 @@ resource "google_project_iam_member" "cloud_run_secrets" {
   member  = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
+# Vertex AI access for Cloud Run (Claude via Vertex)
+resource "google_project_iam_member" "cloud_run_vertex_ai" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
 locals {
   image_uri = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.applybot.repository_id}/applybot:${var.image_tag}"
 }
@@ -48,13 +55,8 @@ resource "google_cloud_run_v2_service" "applybot" {
       }
 
       env {
-        name = "ANTHROPIC_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.anthropic_api_key.secret_id
-            version = "latest"
-          }
-        }
+        name  = "VERTEX_REGION"
+        value = var.region
       }
 
       dynamic "env" {
@@ -109,6 +111,7 @@ resource "google_cloud_run_v2_service" "applybot" {
     google_project_service.services,
     google_project_iam_member.cloud_run_firestore,
     google_project_iam_member.cloud_run_secrets,
+    google_project_iam_member.cloud_run_vertex_ai,
   ]
 
   lifecycle {

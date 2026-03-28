@@ -120,7 +120,7 @@ class TestScoreBatch:
     @patch("applybot.discovery.ranker.llm")
     @patch("applybot.discovery.ranker.settings")
     def test_scores_all_jobs_in_batch(self, mock_settings, mock_llm):
-        mock_settings.anthropic_model_fast = "test-model"
+        mock_settings.vertex_model_fast = "test-model"
         jobs = [
             make_raw_job(title="ML Engineer", url="https://a.com/1"),
             make_raw_job(title="Data Scientist", url="https://b.com/1"),
@@ -140,7 +140,7 @@ class TestScoreBatch:
     @patch("applybot.discovery.ranker.llm")
     @patch("applybot.discovery.ranker.settings")
     def test_missing_index_gets_neutral_score(self, mock_settings, mock_llm):
-        mock_settings.anthropic_model_fast = "test-model"
+        mock_settings.vertex_model_fast = "test-model"
         jobs = [
             make_raw_job(title="Job A", url="https://a.com/1"),
             make_raw_job(title="Job B", url="https://b.com/1"),
@@ -159,7 +159,7 @@ class TestScoreBatch:
     @patch("applybot.discovery.ranker.llm")
     @patch("applybot.discovery.ranker.settings")
     def test_out_of_range_index_ignored(self, mock_settings, mock_llm):
-        mock_settings.anthropic_model_fast = "test-model"
+        mock_settings.vertex_model_fast = "test-model"
         jobs = [make_raw_job(url="https://a.com/1")]
         mock_llm.structured_output.return_value = BatchScoreResult(
             scores=[
@@ -175,7 +175,7 @@ class TestScoreBatch:
     @patch("applybot.discovery.ranker.llm")
     @patch("applybot.discovery.ranker.settings")
     def test_truncates_long_descriptions(self, mock_settings, mock_llm):
-        mock_settings.anthropic_model_fast = "test-model"
+        mock_settings.vertex_model_fast = "test-model"
         long_desc = "x" * 5000
         jobs = [make_raw_job(description=long_desc, url="https://a.com/1")]
         mock_llm.structured_output.return_value = BatchScoreResult(

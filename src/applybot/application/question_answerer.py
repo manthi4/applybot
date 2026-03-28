@@ -92,7 +92,7 @@ Provide answers as a JSON object with:
             prompt,
             AnswerSet,
             system="You are an expert career coach helping with job applications. Be concise, professional, and truthful.",
-            model=settings.anthropic_model_smart,
+            model=settings.vertex_model_smart,
             max_tokens=4096,
         )
 
@@ -148,7 +148,7 @@ CANDIDATE PROFILE:
         return llm.complete(
             prompt,
             system="You are an expert career coach. Write authentic, specific cover letters.",
-            model=settings.anthropic_model_smart,
+            model=settings.vertex_model_smart,
         )
     except Exception:
         logger.exception("Failed to generate cover letter for job %d", job.id)
