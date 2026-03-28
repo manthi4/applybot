@@ -10,9 +10,9 @@ variable "region" {
 }
 
 variable "vertex_region" {
-  description = "Vertex AI region for Claude model access (must support the model — claude-sonnet-4-6 requires us-east5, europe-west1, or asia-southeast1)"
+  description = "Vertex AI region for Claude model access (use 'global' for the global endpoint, or a specific region like us-east5, europe-west1, asia-southeast1)"
   type        = string
-  default     = "us-east5"
+  default     = "global"
 }
 
 variable "serpapi_key" {
