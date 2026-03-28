@@ -35,12 +35,20 @@ logger = logging.getLogger(__name__)
 
 _MAX_RESUME_SIZE = 10 * 1024 * 1024  # 10 MB
 
+_ALLOWED_EXTENSIONS = {".docx", ".pdf", ".md"}
+
+_MIME_TYPES = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pdf": "application/pdf",
+    ".md": "text/markdown",
+}
+
 _FLASH_MESSAGES: dict[str, tuple[str, str]] = {
     "basic_saved": ("Basic profile info saved.", "success"),
     "resume_uploaded": ("Resume uploaded and parsed successfully.", "success"),
     "details_saved": ("Profile details saved.", "success"),
     "no_file": ("No file selected.", "error"),
-    "invalid_docx": ("Please upload a .docx file.", "error"),
+    "invalid_file_type": ("Please upload a .docx, .pdf, or .md file.", "error"),
     "file_too_large": ("Resume file is too large (max 10 MB).", "error"),
     "no_resume": ("No resume file found.", "error"),
     "parse_failed": ("Failed to parse resume.", "error"),
@@ -129,8 +137,7 @@ def _map_resume_to_profile(parsed: ResumeData, profile: UserProfile) -> None:
             for kw in ("experience", "employment", "work history", "career")
         ):
             new_entries = [
-                {"section": section.heading, "details": item}
-                for item in section.items
+                {"section": section.heading, "details": item} for item in section.items
             ]
             if profile.experiences is None:
                 profile.experiences = new_entries
@@ -141,8 +148,7 @@ def _map_resume_to_profile(parsed: ResumeData, profile: UserProfile) -> None:
             for kw in ("education", "academic", "degree", "university", "school")
         ):
             new_entries = [
-                {"section": section.heading, "details": item}
-                for item in section.items
+                {"section": section.heading, "details": item} for item in section.items
             ]
             if profile.education is None:
                 profile.education = new_entries
@@ -269,8 +275,8 @@ def register(rt: Any) -> None:  # noqa: C901
             resume_display,
             Form(
                 Label(
-                    "Upload .docx resume",
-                    Input(type="file", name="resume", accept=".docx"),
+                    "Upload resume (.docx, .pdf, or .md)",
+                    Input(type="file", name="resume", accept=".docx,.pdf,.md"),
                 ),
                 Button("Upload & Parse Resume", type="submit"),
                 method="post",
@@ -417,13 +423,25 @@ def register(rt: Any) -> None:  # noqa: C901
 
     @rt("/profile/resume")
     def get_resume() -> Response:
-        dest = Path("data") / "resume.docx"
-        if not dest.exists():
+        profile = get_profile()
+        resume_path = (
+            Path(profile.resume_path) if profile and profile.resume_path else None
+        )
+        if resume_path is None or not resume_path.exists():
+            # Fall back to legacy hardcoded path for backwards compatibility
+            for ext in _ALLOWED_EXTENSIONS:
+                candidate = Path("data") / f"resume{ext}"
+                if candidate.exists():
+                    resume_path = candidate
+                    break
+        if resume_path is None or not resume_path.exists():
             return RedirectResponse("/profile?error=no_resume", status_code=303)
+        ext = resume_path.suffix.lower()
+        media_type = _MIME_TYPES.get(ext, "application/octet-stream")
         return FileResponse(
-            str(dest),
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            filename="resume.docx",
+            str(resume_path),
+            media_type=media_type,
+            filename=resume_path.name,
         )
 
     @rt("/profile/resume")
@@ -434,8 +452,9 @@ def register(rt: Any) -> None:  # noqa: C901
             return RedirectResponse("/profile?error=no_file", status_code=303)
 
         filename: str = getattr(upload, "filename", "") or ""
-        if not filename.lower().endswith(".docx"):
-            return RedirectResponse("/profile?error=invalid_docx", status_code=303)
+        ext = Path(filename).suffix.lower()
+        if ext not in _ALLOWED_EXTENSIONS:
+            return RedirectResponse("/profile?error=invalid_file_type", status_code=303)
 
         content: bytes = await upload.read(_MAX_RESUME_SIZE + 1)
         if not content:
@@ -445,7 +464,7 @@ def register(rt: Any) -> None:  # noqa: C901
 
         data_dir = Path("data")
         data_dir.mkdir(parents=True, exist_ok=True)
-        dest = data_dir / "resume.docx"
+        dest = data_dir / f"resume{ext}"
         dest.write_bytes(content)
 
         try:
