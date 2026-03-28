@@ -150,6 +150,11 @@ def _parse_resume_docx(path: Path) -> ResumeData:
     return data
 
 
+def _strip_bullet(text: str) -> str:
+    """Remove a leading bullet character and surrounding whitespace from text."""
+    return re.sub(r"^[●•\-\*]\s*", "", text).strip()
+
+
 def _parse_resume_pdf(path: Path) -> ResumeData:
     """Parse a text-based PDF resume into structured ResumeData.
 
@@ -201,7 +206,17 @@ def _parse_resume_pdf(path: Path) -> ResumeData:
             current_section = ResumeSection(heading=text)
             data.sections.append(current_section)
         elif current_section is not None:
-            current_section.items.append(text)
+            # Lowercase-starting non-bullet lines are almost always soft-wrapped
+            # continuations of the previous item (pypdf breaks long lines).
+            # Merge them rather than creating a spurious new item.
+            if (
+                current_section.items
+                and not re.match(r"^[●•\-\*]", text)
+                and text[0].islower()
+            ):
+                current_section.items[-1] += " " + text
+            else:
+                current_section.items.append(_strip_bullet(text))
         else:
             if data.summary:
                 data.summary += "\n" + text

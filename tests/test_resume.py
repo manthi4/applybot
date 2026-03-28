@@ -23,6 +23,7 @@ from applybot.profile.resume import (
     _is_pdf_heading,
     _parse_resume_md,
     _parse_resume_pdf,
+    _strip_bullet,
     parse_resume,
 )
 
@@ -438,6 +439,25 @@ class TestParseRealPdf:
             set(headings)
         ), f"Duplicate section headings: {headings}"
 
+    def test_no_items_start_with_bullet(self, parsed: ResumeData):
+        for section in parsed.sections:
+            for item in section.items:
+                assert not item.startswith(
+                    "●"
+                ), f"Item in section '{section.heading}' still has bullet prefix: {item!r}"
+                assert not item.startswith(
+                    "•"
+                ), f"Item in section '{section.heading}' still has bullet prefix: {item!r}"
+
+    def test_no_spurious_single_word_items(self, parsed: ResumeData):
+        """Wrapped continuation lines should be merged, not left as single words."""
+        for section in parsed.sections:
+            single_word_items = [i for i in section.items if len(i.split()) <= 2]
+            assert len(single_word_items) == 0, (
+                f"Section '{section.heading}' has single/two-word items that look "
+                f"like unmerged continuation lines: {single_word_items}"
+            )
+
     def test_parse_resume_dispatches_pdf(self):
         data = parse_resume(_REAL_PDF)
         assert data.name != ""
@@ -475,3 +495,96 @@ class TestResumeData:
         assert len(restored.sections) == len(original.sections)
         assert restored.sections[0].heading == "Skills"
         assert restored.sections[0].items == ["Python", "Kubernetes"]
+
+
+# ---------------------------------------------------------------------------
+# _strip_bullet — unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestStripBullet:
+    def test_strips_filled_circle(self):
+        assert _strip_bullet("● Lead a team") == "Lead a team"
+
+    def test_strips_bullet_point(self):
+        assert _strip_bullet("• Achieved 5x speed up") == "Achieved 5x speed up"
+
+    def test_strips_dash(self):
+        assert _strip_bullet("- Designed microservices") == "Designed microservices"
+
+    def test_strips_asterisk(self):
+        assert _strip_bullet("* Built a framework") == "Built a framework"
+
+    def test_strips_trailing_whitespace_after_bullet(self):
+        assert _strip_bullet("●  Lead a team") == "Lead a team"
+
+    def test_no_bullet_unchanged(self):
+        assert _strip_bullet("Lead a team") == "Lead a team"
+
+    def test_empty_string(self):
+        assert _strip_bullet("") == ""
+
+    def test_bullet_only(self):
+        assert _strip_bullet("●") == ""
+
+
+# ---------------------------------------------------------------------------
+# Continuation line merging — unit tests using synthetic PDF-like line lists
+# ---------------------------------------------------------------------------
+
+
+class TestContinuationMerging:
+    """Test that _parse_resume_pdf merges soft-wrapped continuation lines."""
+
+    def _parse_lines(self, lines: list[str], tmp_path: Path) -> ResumeData:
+        """Write lines as a minimal single-page PDF and parse it."""
+        from reportlab.lib.pagesizes import LETTER
+        from reportlab.pdfgen import canvas
+
+        pdf_path = tmp_path / "test.pdf"
+        c = canvas.Canvas(str(pdf_path), pagesize=LETTER)
+        y = 750
+        for line in lines:
+            c.drawString(50, y, line)
+            y -= 15
+        c.save()
+        return _parse_resume_pdf(pdf_path)
+
+    def test_lowercase_continuation_merged(self, tmp_path: Path):
+        """A lowercase-starting non-bullet line after a bullet is merged."""
+        try:
+            data = self._parse_lines(
+                [
+                    "Jane Doe",
+                    "jane@example.com",
+                    "Experience",
+                    "● Led a large-scale migration of services to Kubernetes and",
+                    "reduced infrastructure costs by 40%.",
+                ],
+                tmp_path,
+            )
+        except ImportError:
+            pytest.skip("reportlab not installed — skipping synthetic PDF test")
+        exp = data.get_section("Experience")
+        assert exp is not None
+        assert len(exp.items) == 1
+        assert "reduced infrastructure costs" in exp.items[0]
+
+    def test_uppercase_not_merged(self, tmp_path: Path):
+        """An uppercase-starting non-bullet line is NOT merged (treated as new item)."""
+        try:
+            data = self._parse_lines(
+                [
+                    "Jane Doe",
+                    "jane@example.com",
+                    "Experience",
+                    "Senior Engineer at Acme Corp 2020 - 2023",
+                    "Junior Engineer at Beta Inc 2018 - 2020",
+                ],
+                tmp_path,
+            )
+        except ImportError:
+            pytest.skip("reportlab not installed — skipping synthetic PDF test")
+        exp = data.get_section("Experience")
+        assert exp is not None
+        assert len(exp.items) == 2
