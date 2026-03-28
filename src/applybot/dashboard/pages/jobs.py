@@ -45,6 +45,7 @@ def _build_staging_card(job: Job) -> Div:
         Div(
             Div(job.title, cls="staging-card-title"),
             Div(job.company, cls="staging-card-company"),
+            cls="staging-card-text",
         ),
         Div(
             _score_chip(job.relevance_score),
@@ -57,7 +58,7 @@ def _build_staging_card(job: Job) -> Div:
                 cls="staging-remove-btn",
                 title="Remove from staging",
             ),
-            style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0",
+            cls="staging-card-actions",
         ),
         cls="staging-card",
         id=f"staging-{job.id}",
@@ -109,6 +110,20 @@ def _build_staging_area(approved_jobs: list[Job], *, oob: bool = False) -> Div:
             ),
             Div(
                 Span(cls="htmx-indicator staging-spinner", id="build-spinner"),
+                Button(
+                    "Unstage All",
+                    hx_post="/jobs/unstage-all",
+                    hx_target="#staging-area",
+                    hx_swap="outerHTML",
+                    hx_confirm=(
+                        f"Remove all {count} approved job{'s' if count != 1 else ''}"
+                        " from staging? They will return to New."
+                        if count > 0
+                        else None
+                    ),
+                    disabled=True if count == 0 else None,
+                    cls="unstage-all-btn",
+                ),
                 Button(
                     "Build Approved Applications",
                     hx_post="/jobs/build-approved",
@@ -282,6 +297,14 @@ def register(rt: Any) -> None:
         new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
         oob = _build_staging_area(new_approved, oob=True)
         return NotStr(str(result_alert) + str(oob))
+
+    @rt("/jobs/unstage-all")
+    def post_unstage_all() -> object:
+        """Return all approved jobs back to NEW, clearing the staging area."""
+        approved = query_jobs(status=JobStatus.APPROVED, limit=100)
+        for job in approved:
+            update_job(job.id, status=JobStatus.NEW)
+        return _build_staging_area([])
 
     @rt("/jobs/{job_id}/unapprove")
     def post_unapprove(job_id: str) -> object:

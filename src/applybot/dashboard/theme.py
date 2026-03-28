@@ -598,8 +598,20 @@ nav a { position: relative; }
     justify-content: space-between;
     gap: 0.75rem;
     transition: border-color 0.15s var(--ease);
+    overflow: hidden;
 }
 .staging-card:hover { border-color: var(--border-hi); }
+.staging-card-text {
+    min-width: 0;
+    overflow: hidden;
+    flex: 1;
+}
+.staging-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
 .staging-card-title {
     font-size: 0.84rem;
     font-weight: 600;
@@ -607,7 +619,6 @@ nav a { position: relative; }
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 200px;
 }
 .staging-card-company {
     font-size: 0.74rem;
@@ -634,6 +645,26 @@ nav a { position: relative; }
     box-shadow: 0 4px 16px rgba(140,28,28,0.35) !important;
 }
 .build-btn[disabled] {
+    opacity: 0.38 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+}
+
+/* ── Unstage-all button ────────────────────────────────────────── */
+.unstage-all-btn {
+    font-size: 0.78rem !important;
+    padding: 0.4rem 0.9rem !important;
+    margin: 0 !important;
+    background: transparent !important;
+    color: var(--text-2) !important;
+    border: 1px solid var(--border-hi) !important;
+}
+.unstage-all-btn:not([disabled]):hover {
+    color: var(--red-hi) !important;
+    border-color: rgba(140,28,28,0.4) !important;
+    background: rgba(140,28,28,0.08) !important;
+}
+.unstage-all-btn[disabled] {
     opacity: 0.38 !important;
     cursor: not-allowed !important;
     transform: none !important;
