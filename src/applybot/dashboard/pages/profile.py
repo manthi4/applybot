@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -29,6 +30,10 @@ from starlette.responses import FileResponse, Response
 
 from applybot.dashboard.components import alert, page
 from applybot.models.profile import UserProfile, get_profile, save_profile
+from applybot.profile.enrichment import (
+    enrich_profile_with_llm_async,
+    extract_raw_resume_text,
+)
 from applybot.profile.resume import ResumeData, parse_resume
 
 logger = logging.getLogger(__name__)
@@ -482,6 +487,13 @@ def register(rt: Any) -> None:  # noqa: C901
         _map_resume_to_profile(parsed, profile)
 
         save_profile(profile)
+
+        # Kick off LLM enrichment in the background — won't delay the response.
+        # Raw file text is used (not the heuristic-parsed JSON) so the LLM sees
+        # everything, including sections the keyword matcher may have missed.
+        resume_text = extract_raw_resume_text(dest)
+        asyncio.create_task(enrich_profile_with_llm_async(profile, resume_text))
+
         return RedirectResponse("/profile?msg=resume_uploaded", status_code=303)
 
     @rt("/profile/details")

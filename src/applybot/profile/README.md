@@ -56,6 +56,22 @@ Parsing is purely heuristic — no LLM is involved. Each format uses text extrac
 
 Sections are mapped to profile fields via `_map_resume_to_profile()` in `dashboard/pages/profile.py` by keyword matching: headings containing "skill/technologies/tools" → `skills`, "experience/employment/work history/career" → `experiences`, "education/academic/degree/university/school" → `education`.
 
+#### LLM enrichment (post-parse)
+
+After the heuristic pass saves the profile, the upload handler fires an async background task that calls the LLM to review the existing profile + parsed resume and write back a more complete profile. See `enrichment.py`.
+
+```python
+from applybot.profile.enrichment import enrich_profile_with_llm, enrich_profile_with_llm_async
+
+# Synchronous — blocks until LLM + Firestore write complete
+updated: UserProfile = enrich_profile_with_llm(profile, resume_text)
+
+# Async background task — use from an async context (e.g. a Starlette handler)
+asyncio.create_task(enrich_profile_with_llm_async(profile, resume_text))
+```
+
+The LLM is instructed to preserve existing data and only add or improve. It uses `vertex_model_smart` from settings. Errors are caught and logged; the heuristic-parsed profile written earlier remains in Firestore if enrichment fails.
+
 ### CLI Bootstrap
 
 ```bash
@@ -69,9 +85,10 @@ Parses the resume, extracts name/summary/skills/experiences/education sections, 
 
 ## Boundaries
 
-- **Depends on**: `models` (UserProfile + Firestore CRUD), `config` (GCP project)
-- **Does not depend on**: LLM, Discovery, Application, or Tracking
+- **Depends on**: `models` (UserProfile + Firestore CRUD), `config` (GCP project), `llm` (LLM client, used only in `enrichment.py`)
+- **Does not depend on**: Discovery, Application, or Tracking
 - **Used by**: Discovery (query building, relevance ranking), Application (resume tailoring, Q&A), Dashboard (profile display/edit)
 - ProfileManager owns all DB access for the UserProfile table
 - Resume functions are pure file I/O — no database or LLM calls
 - `parse_resume()` is called by the dashboard's `POST /profile/resume` endpoint to parse uploaded files and backfill profile fields (name, summary)
+- `enrich_profile_with_llm_async()` is called as a background task by the same endpoint after the heuristic parse to let the LLM fill in any remaining gaps
