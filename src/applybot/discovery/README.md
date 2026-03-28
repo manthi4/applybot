@@ -15,10 +15,46 @@ Automated job search pipeline: generates queries from the user profile, scrapes 
 | File | Source | Method |
 |---|---|---|
 | **base.py** | — | `BaseScraper` ABC + `RawJob` dataclass |
-| **serpapi.py** | LinkedIn, Indeed, Glassdoor | SerpAPI Google Jobs endpoint |
-| **greenhouse.py** | Greenhouse boards | Public API (`boards-api.greenhouse.io`) |
-| **lever.py** | Lever postings | Public API (`api.lever.co`) |
+| **serpapi.py** | LinkedIn, Indeed, Glassdoor | SerpAPI Google Jobs endpoint (requires `SERPAPI_KEY`) |
+| **greenhouse.py** | Greenhouse boards | Public API (`boards-api.greenhouse.io`) — no key needed |
+| **lever.py** | Lever postings | Public API (`api.lever.co`) — no key needed |
 | **euremotejobs.py** | EuRemoteJobs | HTML scraping with lxml |
+
+#### Greenhouse & Lever: Company Watchlists
+
+Greenhouse and Lever don't offer cross-company search — their APIs are per-company boards only. The scrapers pull all jobs from a curated list of companies and filter by keyword relevance locally. SerpAPI handles broad keyword discovery across all companies/sources.
+
+Default company lists are defined in `orchestrator.py` (`DEFAULT_GREENHOUSE_COMPANIES`, `DEFAULT_LEVER_COMPANIES`) and should be edited to match the companies you want to track.
+
+**Default Greenhouse companies** (`boards.greenhouse.io/<slug>`):
+
+| Slug | Company |
+|---|---|
+| `openai` | OpenAI |
+| `waymo` | Waymo |
+| `covariant` | Covariant |
+| `nuro` | Nuro |
+| `zoox` | Zoox |
+| `imbue` | Imbue |
+| `shield-ai` | Shield AI |
+| `robust-robotics` | Robust Robotics |
+| `applovin` | AppLovin |
+| `scale` | Scale AI |
+
+**Default Lever companies** (`jobs.lever.co/<slug>`):
+
+| Slug | Company |
+|---|---|
+| `anduril` | Anduril Industries |
+| `scale-ai` | Scale AI |
+| `boston-dynamics` | Boston Dynamics |
+| `figureai` | Figure AI |
+| `skydio` | Skydio |
+| `physical-intelligence` | Physical Intelligence |
+| `apptronik` | Apptronik |
+| `innerspace` | InnerSpace |
+| `cohere` | Cohere |
+| `mistral` | Mistral AI |
 
 ## Public API
 
