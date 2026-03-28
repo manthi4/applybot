@@ -404,6 +404,99 @@ details:not(article > details) summary::marker { display: none; }
 article[role="note"]   { border-left: 3px solid #3b82f6; }
 article[role="status"] { border-left: 3px solid #22c55e; }
 article[role="alert"]  { border-left: 3px solid var(--red); }
+
+/* ── Profile page ──────────────────────────────────────────────── */
+.profile-section {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+}
+.profile-section h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+.profile-field {
+    margin-bottom: 0.6rem;
+    display: flex;
+    gap: 0.5rem;
+}
+.profile-field-label {
+    font-weight: 600;
+    color: var(--text-2);
+    min-width: 120px;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.profile-field-value {
+    color: var(--text);
+    font-size: 0.9rem;
+}
+.profile-empty {
+    color: var(--text-3);
+    font-style: italic;
+    font-size: 0.85rem;
+}
+.profile-tag {
+    display: inline-block;
+    padding: 0.15em 0.55em;
+    margin: 0.15em;
+    background: rgba(140, 28, 28, 0.08);
+    border: 1px solid rgba(140, 28, 28, 0.2);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    color: var(--text);
+}
+.resume-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+.profile-completeness {
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+}
+.completeness-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+.completeness-pct {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--red-hi);
+}
+.completeness-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.completeness-fill {
+    height: 100%;
+    background: var(--red-hi);
+    border-radius: 999px;
+    transition: width 0.3s var(--ease);
+}
+.resume-download {
+    margin-left: auto;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
 """
 
 theme_headers = (Style(THEME_CSS),)

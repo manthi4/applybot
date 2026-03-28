@@ -55,3 +55,5 @@ Parses the resume, extracts name/summary/skills/experiences/education sections, 
 - **Used by**: Discovery (query building, relevance ranking), Application (resume tailoring, Q&A), Dashboard (profile display/edit)
 - ProfileManager owns all DB access for the UserProfile table
 - Resume functions are pure file I/O — no database or LLM calls
+- `parse_resume()` is called by the dashboard's `POST /profile/resume` endpoint to parse uploaded .docx files and backfill profile fields (name, summary)
+- `_map_resume_to_profile()` in `dashboard/pages/profile.py` maps parsed resume sections to profile fields by keyword matching: headings containing "skill/technologies/tools" → `skills`, "experience/employment/work history/career" → `experiences`, "education/academic/degree/university/school" → `education`
