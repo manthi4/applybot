@@ -312,6 +312,8 @@ def register(rt: Any) -> None:
         job = get_job(job_id)
         if job is None:
             return alert("Job not found.", "error")
+        if job.status != JobStatus.APPROVED:
+            return alert(f"Job is {job.status.value}, not approved.", "error")
         update_job(job_id, status=JobStatus.NEW)
         new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
         return _build_staging_area(new_approved)

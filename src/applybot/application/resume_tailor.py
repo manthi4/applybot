@@ -73,6 +73,7 @@ def tailor_resume(
         tmp.write(content)
         tmp_path = Path(tmp.name)
 
+    out_path: Path | None = None
     try:
         base_data = parse_resume(tmp_path)
 
@@ -95,7 +96,7 @@ def tailor_resume(
         return output_name
     finally:
         tmp_path.unlink(missing_ok=True)
-        if "out_path" in locals():
+        if out_path is not None:
             out_path.unlink(missing_ok=True)
 
 
