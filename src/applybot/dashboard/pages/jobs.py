@@ -66,7 +66,6 @@ def _build_staging_card(job: Job) -> Div:
                 hx_target="#staging-area",
                 hx_swap="outerHTML",
                 hx_include="#jobs-filter-form",
-                hx_confirm=f"Remove '{job.title}' from staging? It will return to New.",
                 cls="staging-remove-btn",
                 title="Remove from staging",
             ),
@@ -128,12 +127,6 @@ def _build_staging_area(approved_jobs: list[Job], *, oob: bool = False) -> Div:
                     hx_target="#staging-area",
                     hx_swap="outerHTML",
                     hx_include="#jobs-filter-form",
-                    hx_confirm=(
-                        f"Remove all {count} approved job{'s' if count != 1 else ''}"
-                        " from staging? They will return to New."
-                        if count > 0
-                        else None
-                    ),
                     disabled=True if count == 0 else None,
                     cls="unstage-all-btn",
                 ),
