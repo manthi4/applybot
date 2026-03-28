@@ -43,7 +43,14 @@ The frontend uses a modular architecture:
 1. **Overview** (`/`) — Stats cards, pipeline progress bars, application status breakdown
 2. **Job Queue** (`/jobs`) — Filterable job list with HTMX-powered approve/skip actions
 3. **Applications** (`/apps`) — Applications by status with cover letter, answers, and review actions
-4. **Profile** (`/profile`) — Name/email/summary editor + full profile JSON display
+4. **Profile** (`/profile`) — Full profile editor with multiple sections:
+   - **Basic Info**: Edit name, email, summary
+   - **Resume upload**: Upload .docx, auto-parsed with `parse_resume()`, saved to `data/resume.docx`, backfills empty name/summary
+   - **Skills / Experience / Education / Preferences**: Structured display + JSON textarea editor for each
+   - **Raw JSON**: Collapsible full profile JSON view
+   - **Flash messages**: Success/error alerts after each action
+
+   Routes: `GET /profile`, `POST /profile` (basic info), `POST /profile/resume` (upload), `POST /profile/details` (skills/experiences/education/preferences)
 
 The frontend queries the database directly using Firestore CRUD functions from models. Interactive actions (approve, skip, status changes) use HTMX partial page swaps.
 
