@@ -462,6 +462,41 @@ article[role="alert"]  { border-left: 3px solid var(--red); }
     margin-bottom: 1rem;
     font-size: 0.9rem;
 }
+.profile-completeness {
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+}
+.completeness-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+.completeness-pct {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--red-hi);
+}
+.completeness-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.completeness-fill {
+    height: 100%;
+    background: var(--red-hi);
+    border-radius: 999px;
+    transition: width 0.3s var(--ease);
+}
+.resume-download {
+    margin-left: auto;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
 """
 
 theme_headers = (Style(THEME_CSS),)

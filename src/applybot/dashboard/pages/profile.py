@@ -10,6 +10,7 @@ from typing import Any
 from fasthtml.common import (
     H1,
     H3,
+    A,
     Button,
     Details,
     Div,
@@ -24,10 +25,11 @@ from fasthtml.common import (
     Textarea,
 )
 from starlette.requests import Request
+from starlette.responses import FileResponse, Response
 
 from applybot.dashboard.components import alert, page
 from applybot.models.profile import UserProfile, get_profile, save_profile
-from applybot.profile.resume import parse_resume
+from applybot.profile.resume import ResumeData, parse_resume
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +39,105 @@ _FLASH_MESSAGES: dict[str, tuple[str, str]] = {
     "details_saved": ("Profile details saved.", "success"),
     "no_file": ("No file selected.", "error"),
     "invalid_docx": ("Please upload a .docx file.", "error"),
+    "no_resume": ("No resume file found.", "error"),
     "parse_failed": ("Failed to parse resume.", "error"),
     "invalid_json": ("Invalid JSON in one or more fields.", "error"),
 }
+
+_PROFILE_FIELDS = [
+    "name",
+    "email",
+    "summary",
+    "skills",
+    "experiences",
+    "education",
+    "preferences",
+    "resume_path",
+]
+
+_SKILLS_PLACEHOLDER = """\
+{
+  "Programming": ["Python", "TypeScript"],
+  "ML/AI": ["PyTorch", "scikit-learn"],
+  "Tools": ["Docker", "Git", "Terraform"]
+}"""
+
+_EXPERIENCES_PLACEHOLDER = """\
+[
+  {
+    "title": "ML Engineer",
+    "company": "Acme Corp",
+    "dates": "2022-2024",
+    "description": "Built recommendation systems..."
+  }
+]"""
+
+_EDUCATION_PLACEHOLDER = """\
+[
+  {
+    "degree": "M.S. Computer Science",
+    "school": "MIT",
+    "year": "2022"
+  }
+]"""
+
+_PREFERENCES_PLACEHOLDER = """\
+{
+  "roles": ["ML Engineer", "Data Scientist"],
+  "locations": ["Remote", "New York"],
+  "salary_min": 150000
+}"""
+
+
+def _count_filled(profile: UserProfile) -> int:
+    """Count how many profile fields have non-empty values."""
+    count = 0
+    for fld in _PROFILE_FIELDS:
+        val = getattr(profile, fld, None)
+        if isinstance(val, dict | list):
+            if val:
+                count += 1
+        elif val:
+            count += 1
+    return count
+
+
+def _map_resume_to_profile(parsed: ResumeData, profile: UserProfile) -> None:
+    """Map parsed resume sections to profile fields when they're empty."""
+    resume_dict = parsed.to_dict()
+
+    if not profile.name and resume_dict.get("name"):
+        profile.name = resume_dict["name"]
+    if not profile.summary and resume_dict.get("summary"):
+        profile.summary = resume_dict["summary"]
+
+    for section in parsed.sections:
+        heading_lower = section.heading.lower()
+
+        if any(
+            kw in heading_lower
+            for kw in ("skill", "technologies", "tools", "tech stack", "competenc")
+        ):
+            if not profile.skills:
+                profile.skills = {section.heading: section.items}
+        elif any(
+            kw in heading_lower
+            for kw in ("experience", "employment", "work history", "career")
+        ):
+            if not profile.experiences:
+                profile.experiences = [
+                    {"section": section.heading, "details": item}
+                    for item in section.items
+                ]
+        elif any(
+            kw in heading_lower
+            for kw in ("education", "academic", "degree", "university", "school")
+        ):
+            if not profile.education:
+                profile.education = [
+                    {"section": section.heading, "details": item}
+                    for item in section.items
+                ]
 
 
 def _field(label: str, value: Any) -> Div:
@@ -116,6 +214,23 @@ def register(rt: Any) -> None:  # noqa: C901
             text, kind = _FLASH_MESSAGES[error]
             flash = alert(text, kind)
 
+        # ── Completeness ───────────────────────────────────────────
+        filled = _count_filled(p)
+        total = len(_PROFILE_FIELDS)
+        pct = int(filled / total * 100) if total else 0
+        completeness = Div(
+            Div(
+                Span(f"{filled}/{total} fields complete", cls="profile-field-value"),
+                Span(f"{pct}%", cls="completeness-pct"),
+                cls="completeness-header",
+            ),
+            Div(
+                Div(style=f"width:{pct}%;", cls="completeness-fill"),
+                cls="completeness-bar",
+            ),
+            cls="profile-completeness",
+        )
+
         # ── Basic Info ──────────────────────────────────────────────
         basic_section = Div(
             H3("Basic Information"),
@@ -136,6 +251,7 @@ def register(rt: Any) -> None:  # noqa: C901
             resume_display = Div(
                 Span("📄"),
                 Span(p.resume_path, cls="profile-field-value"),
+                A("Download", href="/profile/resume", cls="resume-download"),
                 cls="resume-info",
             )
         resume_section = Div(
@@ -158,14 +274,19 @@ def register(rt: Any) -> None:  # noqa: C901
         skills_section = Div(
             H3("Skills"),
             _skills_display(p.skills),
-            Form(
-                Label(
-                    "Edit Skills (JSON dict)",
-                    Textarea(json.dumps(p.skills, indent=2), name="skills", rows="8"),
+            Details(
+                Summary("Edit Skills"),
+                Form(
+                    Textarea(
+                        json.dumps(p.skills, indent=2) if p.skills else "",
+                        name="skills",
+                        rows="8",
+                        placeholder=_SKILLS_PLACEHOLDER,
+                    ),
+                    Button("Save Skills", type="submit"),
+                    method="post",
+                    action="/profile/details",
                 ),
-                Button("Save Skills", type="submit"),
-                method="post",
-                action="/profile/details",
             ),
             cls="profile-section",
         )
@@ -174,18 +295,19 @@ def register(rt: Any) -> None:  # noqa: C901
         exp_section = Div(
             H3("Experience"),
             _list_display(p.experiences, "No experience entries yet."),
-            Form(
-                Label(
-                    "Edit Experience (JSON list)",
+            Details(
+                Summary("Edit Experience"),
+                Form(
                     Textarea(
-                        json.dumps(p.experiences, indent=2),
+                        json.dumps(p.experiences, indent=2) if p.experiences else "",
                         name="experiences",
                         rows="8",
+                        placeholder=_EXPERIENCES_PLACEHOLDER,
                     ),
+                    Button("Save Experience", type="submit"),
+                    method="post",
+                    action="/profile/details",
                 ),
-                Button("Save Experience", type="submit"),
-                method="post",
-                action="/profile/details",
             ),
             cls="profile-section",
         )
@@ -194,16 +316,19 @@ def register(rt: Any) -> None:  # noqa: C901
         edu_section = Div(
             H3("Education"),
             _list_display(p.education, "No education entries yet."),
-            Form(
-                Label(
-                    "Edit Education (JSON list)",
+            Details(
+                Summary("Edit Education"),
+                Form(
                     Textarea(
-                        json.dumps(p.education, indent=2), name="education", rows="8"
+                        json.dumps(p.education, indent=2) if p.education else "",
+                        name="education",
+                        rows="8",
+                        placeholder=_EDUCATION_PLACEHOLDER,
                     ),
+                    Button("Save Education", type="submit"),
+                    method="post",
+                    action="/profile/details",
                 ),
-                Button("Save Education", type="submit"),
-                method="post",
-                action="/profile/details",
             ),
             cls="profile-section",
         )
@@ -212,18 +337,19 @@ def register(rt: Any) -> None:  # noqa: C901
         prefs_section = Div(
             H3("Preferences"),
             _prefs_display(p.preferences),
-            Form(
-                Label(
-                    "Edit Preferences (JSON dict)",
+            Details(
+                Summary("Edit Preferences"),
+                Form(
                     Textarea(
-                        json.dumps(p.preferences, indent=2),
+                        json.dumps(p.preferences, indent=2) if p.preferences else "",
                         name="preferences",
                         rows="8",
+                        placeholder=_PREFERENCES_PLACEHOLDER,
                     ),
+                    Button("Save Preferences", type="submit"),
+                    method="post",
+                    action="/profile/details",
                 ),
-                Button("Save Preferences", type="submit"),
-                method="post",
-                action="/profile/details",
             ),
             cls="profile-section",
         )
@@ -255,6 +381,7 @@ def register(rt: Any) -> None:  # noqa: C901
         return page(
             H1("Profile"),
             flash,
+            completeness,
             basic_section,
             resume_section,
             skills_section,
@@ -277,6 +404,17 @@ def register(rt: Any) -> None:  # noqa: C901
         profile.summary = summary
         save_profile(profile)
         return RedirectResponse("/profile?msg=basic_saved", status_code=303)
+
+    @rt("/profile/resume")
+    def get_resume() -> Response:
+        dest = Path("data") / "resume.docx"
+        if not dest.exists():
+            return RedirectResponse("/profile?error=no_resume", status_code=303)
+        return FileResponse(
+            str(dest),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename="resume.docx",
+        )
 
     @rt("/profile/resume")
     async def post_resume(request: Request) -> RedirectResponse:
@@ -310,11 +448,7 @@ def register(rt: Any) -> None:  # noqa: C901
 
         profile.resume_path = str(dest)
 
-        resume_dict = parsed.to_dict()
-        if not profile.name and resume_dict.get("name"):
-            profile.name = resume_dict["name"]
-        if not profile.summary and resume_dict.get("summary"):
-            profile.summary = resume_dict["summary"]
+        _map_resume_to_profile(parsed, profile)
 
         save_profile(profile)
         return RedirectResponse("/profile?msg=resume_uploaded", status_code=303)
@@ -331,22 +465,22 @@ def register(rt: Any) -> None:  # noqa: C901
             profile = UserProfile(name="")
 
         try:
-            if skills:
+            if skills.strip():
                 parsed_skills = json.loads(skills)
                 if not isinstance(parsed_skills, dict):
                     raise ValueError("skills must be a JSON object")
                 profile.skills = parsed_skills
-            if experiences:
+            if experiences.strip():
                 parsed_exp = json.loads(experiences)
                 if not isinstance(parsed_exp, list):
                     raise ValueError("experiences must be a JSON array")
                 profile.experiences = parsed_exp
-            if education:
+            if education.strip():
                 parsed_edu = json.loads(education)
                 if not isinstance(parsed_edu, list):
                     raise ValueError("education must be a JSON array")
                 profile.education = parsed_edu
-            if preferences:
+            if preferences.strip():
                 parsed_prefs = json.loads(preferences)
                 if not isinstance(parsed_prefs, dict):
                     raise ValueError("preferences must be a JSON object")
