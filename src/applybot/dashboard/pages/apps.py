@@ -115,7 +115,7 @@ def _build_app_card(application: Application, job: Job | None) -> object:
 
 
 def register(rt: Any) -> None:
-    @rt("/apps")
+    @rt("/apps", methods=["get"])
     def get(status: str = "") -> tuple[object, ...]:
         app_status = None
         if status:
@@ -144,7 +144,7 @@ def register(rt: Any) -> None:
 
         return page(H1("Applications"), form, count_text, *cards, title="Applications")
 
-    @rt("/apps/{app_id}/approve")
+    @rt("/apps/{app_id}/approve", methods=["post"])
     def post(app_id: str) -> object:
         try:
             update_status(app_id, ApplicationStatus.APPROVED, UpdateSource.MANUAL)
@@ -152,7 +152,7 @@ def register(rt: Any) -> None:
         except (ValueError, InvalidTransitionError) as e:
             return alert(str(e), "error")
 
-    @rt("/apps/{app_id}/draft")
+    @rt("/apps/{app_id}/draft", methods=["post"])
     def post_draft(app_id: str) -> object:
         try:
             update_status(app_id, ApplicationStatus.DRAFT, UpdateSource.MANUAL)

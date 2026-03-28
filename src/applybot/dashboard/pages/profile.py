@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +27,7 @@ from fasthtml.common import (
     Textarea,
 )
 from starlette.requests import Request
-from starlette.responses import FileResponse, Response
+from starlette.responses import Response
 
 from applybot.dashboard.components import alert, page
 from applybot.models.profile import UserProfile, get_profile, save_profile
@@ -35,6 +36,7 @@ from applybot.profile.enrichment import (
     extract_raw_resume_text,
 )
 from applybot.profile.resume import ResumeData, parse_resume
+from applybot.storage import file_exists, get_download_response, upload_file
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +223,7 @@ def _prefs_display(prefs: dict[str, Any]) -> Any:
 
 
 def register(rt: Any) -> None:  # noqa: C901
-    @rt("/profile")
+    @rt("/profile", methods=["get"])
     def get(msg: str = "", error: str = "") -> Any:
         profile = get_profile()
         p = profile or UserProfile(name="")
@@ -413,7 +415,7 @@ def register(rt: Any) -> None:  # noqa: C901
             title="Profile",
         )
 
-    @rt("/profile")
+    @rt("/profile", methods=["post"])
     def post_basic(
         name: str = "", email: str = "", summary: str = ""
     ) -> RedirectResponse:
@@ -426,30 +428,20 @@ def register(rt: Any) -> None:  # noqa: C901
         save_profile(profile)
         return RedirectResponse("/profile?msg=basic_saved", status_code=303)
 
-    @rt("/profile/resume")
+    @rt("/profile/resume", methods=["get"])
     def get_resume() -> Response:
         profile = get_profile()
-        resume_path = (
-            Path(profile.resume_path) if profile and profile.resume_path else None
-        )
-        if resume_path is None or not resume_path.exists():
-            # Fall back to legacy hardcoded path for backwards compatibility
-            for ext in _ALLOWED_EXTENSIONS:
-                candidate = Path("data") / f"resume{ext}"
-                if candidate.exists():
-                    resume_path = candidate
-                    break
-        if resume_path is None or not resume_path.exists():
-            return RedirectResponse("/profile?error=no_resume", status_code=303)
-        ext = resume_path.suffix.lower()
-        media_type = _MIME_TYPES.get(ext, "application/octet-stream")
-        return FileResponse(
-            str(resume_path),
-            media_type=media_type,
-            filename=resume_path.name,
-        )
+        object_name = profile.resume_path if profile and profile.resume_path else None
+        if object_name and file_exists(object_name):
+            return get_download_response(object_name, Path(object_name).name)
+        # Legacy fallback: check old local paths for backwards compat
+        for ext in _ALLOWED_EXTENSIONS:
+            legacy_name = f"resumes/resume{ext}"
+            if file_exists(legacy_name):
+                return get_download_response(legacy_name, f"resume{ext}")
+        return RedirectResponse("/profile?error=no_resume", status_code=303)
 
-    @rt("/profile/resume")
+    @rt("/profile/resume", methods=["post"])
     async def post_resume(request: Request) -> RedirectResponse:
         form = await request.form()
         upload = form.get("resume")
@@ -467,36 +459,42 @@ def register(rt: Any) -> None:  # noqa: C901
         if len(content) > _MAX_RESUME_SIZE:
             return RedirectResponse("/profile?error=file_too_large", status_code=303)
 
-        data_dir = Path("data")
-        data_dir.mkdir(parents=True, exist_ok=True)
-        dest = data_dir / f"resume{ext}"
-        dest.write_bytes(content)
+        # Upload to GCS (or local fallback)
+        object_name = f"resumes/resume{ext}"
+        upload_file(content, object_name)
 
+        # parse_resume / extract_raw_resume_text need a local Path, so use a temp file
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
         try:
-            parsed = parse_resume(dest)
-        except Exception:
-            logger.exception("Failed to parse uploaded resume at %s", dest)
-            return RedirectResponse("/profile?error=parse_failed", status_code=303)
+            try:
+                parsed = parse_resume(tmp_path)
+            except Exception:
+                logger.exception("Failed to parse uploaded resume")
+                return RedirectResponse("/profile?error=parse_failed", status_code=303)
 
-        profile = get_profile()
-        if profile is None:
-            profile = UserProfile(name="")
+            profile = get_profile()
+            if profile is None:
+                profile = UserProfile(name="")
 
-        profile.resume_path = str(dest)
+            profile.resume_path = object_name
 
-        _map_resume_to_profile(parsed, profile)
+            _map_resume_to_profile(parsed, profile)
 
-        save_profile(profile)
+            save_profile(profile)
 
-        # Kick off LLM enrichment in the background — won't delay the response.
-        # Raw file text is used (not the heuristic-parsed JSON) so the LLM sees
-        # everything, including sections the keyword matcher may have missed.
-        resume_text = extract_raw_resume_text(dest)
-        asyncio.create_task(enrich_profile_with_llm_async(profile, resume_text))
+            # Kick off LLM enrichment in the background — won't delay the response.
+            # Raw file text is used (not the heuristic-parsed JSON) so the LLM sees
+            # everything, including sections the keyword matcher may have missed.
+            resume_text = extract_raw_resume_text(tmp_path)
+            asyncio.create_task(enrich_profile_with_llm_async(profile, resume_text))
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
         return RedirectResponse("/profile?msg=resume_uploaded", status_code=303)
 
-    @rt("/profile/details")
+    @rt("/profile/details", methods=["post"])
     def post_details(
         skills: str = "",
         experiences: str = "",

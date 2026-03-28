@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fasthtml.common import (
@@ -40,6 +41,8 @@ from fasthtml.common import (
     Ul,
 )
 
+logger = logging.getLogger(__name__)
+
 # ---------- Layout ----------
 
 
@@ -51,7 +54,9 @@ def nav() -> Nav:
 
         approved_count = count_jobs_by_status().get("approved", 0)
     except Exception:
-        pass
+        logger.warning(
+            "Failed to fetch approved job count for nav badge", exc_info=True
+        )
 
     jobs_link = (
         A(

@@ -24,6 +24,13 @@ resource "google_project_iam_member" "cloud_run_vertex_ai" {
   member  = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
+# GCS bucket access for Cloud Run
+resource "google_storage_bucket_iam_member" "cloud_run_storage" {
+  bucket = google_storage_bucket.data.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
 locals {
   image_uri = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.applybot.repository_id}/applybot:${var.image_tag}"
 }
@@ -57,6 +64,11 @@ resource "google_cloud_run_v2_service" "applybot" {
       env {
         name  = "VERTEX_REGION"
         value = var.region
+      }
+
+      env {
+        name  = "GCS_BUCKET_NAME"
+        value = google_storage_bucket.data.name
       }
 
       dynamic "env" {
@@ -112,6 +124,7 @@ resource "google_cloud_run_v2_service" "applybot" {
     google_project_iam_member.cloud_run_firestore,
     google_project_iam_member.cloud_run_secrets,
     google_project_iam_member.cloud_run_vertex_ai,
+    google_storage_bucket_iam_member.cloud_run_storage,
   ]
 
   lifecycle {

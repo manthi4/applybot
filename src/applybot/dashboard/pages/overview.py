@@ -14,7 +14,7 @@ PIPELINE_STAGES = ["new", "reviewing", "approved", "applied"]
 
 
 def register(rt: Any) -> None:
-    @rt("/")
+    @rt("/", methods=["get"])
     def get() -> tuple[object, ...]:
         job_counts = count_jobs_by_status()
         total_jobs = job_counts.get("total", 0)
