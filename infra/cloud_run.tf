@@ -63,7 +63,7 @@ resource "google_cloud_run_v2_service" "applybot" {
 
       env {
         name  = "VERTEX_REGION"
-        value = var.region
+        value = var.vertex_region
       }
 
       env {

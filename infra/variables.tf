@@ -4,9 +4,15 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "GCP region"
+  description = "GCP region (for Cloud Run, Artifact Registry, GCS, etc.)"
   type        = string
   default     = "us-central1"
+}
+
+variable "vertex_region" {
+  description = "Vertex AI region for Claude model access (must support the model — claude-sonnet-4-6 requires us-east5, europe-west1, or asia-southeast1)"
+  type        = string
+  default     = "us-east5"
 }
 
 variable "serpapi_key" {
