@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fasthtml.common import H1, A, P, Strong
+from fasthtml.common import H1, H4, A, Article, Div, P, Small, Strong
 
 from applybot.dashboard.components import (
     action_buttons,
     alert,
     collapsible_text,
     confirmed_card,
-    detail_card,
     filter_form,
     page,
     status_badge,
@@ -24,41 +23,46 @@ def _job_status_options(current: str) -> list[tuple[str, str]]:
 
 
 def _build_job_card(job: Job) -> object:
-    score = (
-        f"Score: {job.relevance_score:.0f}"
-        if job.relevance_score is not None
-        else "Score: N/A"
-    )
-    header = f"{job.title} at {job.company} -- {score}"
+    score = f"{job.relevance_score:.0f}" if job.relevance_score is not None else "N/A"
+    source_str = job.source.value if hasattr(job.source, "value") else str(job.source)
+    status_str = job.status.value if hasattr(job.status, "value") else str(job.status)
 
-    content = [
-        P(
-            Strong("Location: "),
-            job.location,
-            " | ",
-            Strong("Source: "),
-            job.source.value if hasattr(job.source, "value") else str(job.source),
-            " | ",
-            Strong("Status: "),
-            status_badge(
-                job.status.value if hasattr(job.status, "value") else str(job.status)
-            ),
+    header = Div(
+        Div(
+            H4(f"{job.title} at {job.company}", style="margin:0"),
+            Small(f"Score: {score} · {job.location} · {source_str}"),
+            style="flex:1",
         ),
-    ]
+        Div(status_badge(status_str), style="align-self:center;margin-left:1rem"),
+        style="display:flex;align-items:flex-start;gap:0.5rem",
+    )
+
+    meta_parts: list[object] = []
     if job.relevance_reasoning:
-        content.append(P(Strong("Match reasoning: "), job.relevance_reasoning))
+        meta_parts.append(P(Strong("Match: "), job.relevance_reasoning))
     if job.url:
-        content.append(P(A("View Job Posting", href=job.url, target="_blank")))
-    if job.description:
-        content.append(collapsible_text("Description", job.description[:2000]))
+        meta_parts.append(P(A("View Job Posting ↗", href=job.url, target="_blank")))
+
+    actions: list[object] = []
     if job.status == JobStatus.NEW:
-        content.append(
+        actions.append(
             action_buttons(
                 ("Approve", f"/jobs/{job.id}/approve", f"#job-{job.id}", ""),
                 ("Skip", f"/jobs/{job.id}/skip", f"#job-{job.id}", "secondary"),
             )
         )
-    return detail_card("job", job.id, header, *content)
+
+    desc_section: list[object] = []
+    if job.description:
+        desc_section.append(collapsible_text("Description", job.description[:2000]))
+
+    return Article(
+        header,
+        *meta_parts,
+        *actions,
+        *desc_section,
+        id=f"job-{job.id}",
+    )
 
 
 def register(rt: Any) -> None:
