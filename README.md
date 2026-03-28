@@ -21,7 +21,7 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 3. **Application** — For each approved job, tailors your resume (rephrase/reorder only — never fabricate), drafts answers to common application questions, generates a cover letter, and flags any profile gaps that need human input. Creates an Application record for review.
 4. **Tracking** — Manages application lifecycle through a validated state machine (DRAFT → READY_FOR_REVIEW → APPROVED → SUBMITTED → RECEIVED → INTERVIEW/OFFER/REJECTED). Scans Gmail to auto-detect status updates from applied-to companies.
 5. **Dashboard** — FastHTML UI for reviewing job queue, managing applications, editing profile, and viewing pipeline statistics. Protected by TOTP authentication.
-6. **Scheduler** — GCP Cloud Functions triggered by Cloud Scheduler for automated daily execution.
+6. **Scheduler** — GCP Cloud Functions triggered by Cloud Scheduler for automated daily execution (discovery and Gmail tracking only; application preparation is triggered manually from the dashboard).
 
 **Human-in-the-loop**: The agent prepares everything, but never submits without explicit approval. Safety guardrail: the agent never submits without explicit approval.
 
@@ -354,8 +354,9 @@ pytest
 | Function | Trigger | Schedule | Purpose |
 |---|---|---|---|
 | `discovery_fn` | Cloud Scheduler | Daily at 8am | Run discovery orchestrator, send notification with summary |
-| `application_fn` | Pub/Sub or Cloud Scheduler | 2x daily | Prepare applications for approved jobs |
 | `tracking_fn` | Cloud Scheduler | 2x daily | Scan Gmail for status updates |
+
+> **Application preparation** is **not** scheduled. It is triggered manually via the **"Build Approved Applications"** button on the dashboard's Job Queue page (`POST /jobs/build-approved`). This gives the user full control over when LLM calls are made.
 
 ### Infrastructure
 
@@ -363,7 +364,7 @@ pytest
 - **Dashboard**: GCP Cloud Run (FastHTML), scales 0–1
 - **Secrets**: GCP Secret Manager for API keys
 - **Auth**: Service account with `roles/datastore.user` for Firestore access
-- **Scheduling**: Cloud Scheduler cron jobs
+- **Scheduling**: Cloud Scheduler cron jobs (discovery and tracking only)
 
 ### CI/CD (GitHub Actions)
 
@@ -449,7 +450,7 @@ Application tracker state machine, Gmail integration with email classification.
 FastHTML frontend (4 pages, PicoCSS + HTMX), TOTP session authentication.
 
 ### Phase 7: Cloud Deployment 🔧
-GCP Cloud Run, Firestore, Secret Manager, Artifact Registry — Terraform IaC ready. GitHub Actions CI/CD workflows for Terraform and Docker. Cloud Scheduler configured.
+GCP Cloud Run, Firestore, Secret Manager, Artifact Registry — Terraform IaC ready. GitHub Actions CI/CD workflows for Terraform and Docker. Cloud Scheduler configured for discovery and tracking.
 
 ---
 

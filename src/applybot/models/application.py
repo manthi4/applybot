@@ -41,6 +41,7 @@ class Application(BaseModel):
     tailored_resume_path: str = ""
     cover_letter: str = ""
     answers: dict[str, Any] = Field(default_factory=dict)
+    profile_gaps: list[dict[str, str]] = Field(default_factory=list)
     status: ApplicationStatus = ApplicationStatus.DRAFT
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     submitted_at: datetime | None = None

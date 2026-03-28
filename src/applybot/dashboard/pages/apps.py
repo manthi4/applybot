@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fasthtml.common import H1, Hr, P, Strong
+from fasthtml.common import H1, Details, Div, Hr, P, Span, Strong, Summary
 
 from applybot.dashboard.components import (
     action_buttons,
@@ -32,6 +32,34 @@ def _app_status_options(current: str) -> list[tuple[str, str]]:
     ]
 
 
+def _build_gap_section(gaps: list[dict[str, str]]) -> Div:
+    """Render a warning section for profile gaps on a READY_FOR_REVIEW application."""
+    items = [
+        Div(
+            Span("?", cls="gap-icon"),
+            Div(
+                Div(g.get("question", ""), cls="gap-question"),
+                Div(g.get("context", ""), cls="gap-context"),
+            ),
+            cls="gap-item",
+        )
+        for g in gaps
+    ]
+    n = len(gaps)
+    return Div(
+        Div(
+            Span(f"⚠ {n} Profile Gap{'s' if n != 1 else ''}", cls="gap-header-label"),
+            Span(
+                "These questions couldn't be answered from your profile.",
+                cls="gap-header-sub",
+            ),
+            cls="gap-header",
+        ),
+        *items,
+        cls="gap-section",
+    )
+
+
 def _build_app_card(application: Application, job: Job | None) -> object:
     job_label = f"{job.title} at {job.company}" if job else f"Job #{application.job_id}"
     summary_text = (
@@ -49,14 +77,20 @@ def _build_app_card(application: Application, job: Job | None) -> object:
     ]
     if application.submitted_at:
         content.append(P(Strong("Submitted: "), str(application.submitted_at)[:19]))
+
+    # Show profile gaps prominently on READY_FOR_REVIEW cards
+    if (
+        application.profile_gaps
+        and application.status == ApplicationStatus.READY_FOR_REVIEW
+    ):
+        content.append(_build_gap_section(application.profile_gaps))
+
     if application.cover_letter:
         content.append(collapsible_text("Cover Letter", application.cover_letter))
     if application.answers:
         qa_items = []
         for q, a in application.answers.items():
             qa_items.extend([P(Strong("Q: "), q), P("A: ", a), Hr()])
-        from fasthtml.common import Details, Summary
-
         content.append(Details(Summary("Application Answers"), *qa_items))
     if application.tailored_resume_path:
         content.append(P(Strong("Tailored resume: "), application.tailored_resume_path))

@@ -497,6 +497,281 @@ article[role="alert"]  { border-left: 3px solid var(--red); }
     font-size: 0.85rem;
     font-weight: 600;
 }
+
+/* ── Nav badge ─────────────────────────────────────────────────── */
+nav a { position: relative; }
+.nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.1em;
+    padding: 0 0.3em;
+    height: 1.1em;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 1;
+    background: var(--red-hi);
+    color: #fff;
+    margin-left: 0.3em;
+    vertical-align: middle;
+    letter-spacing: 0;
+    box-shadow: 0 0 6px rgba(196,56,56,0.45);
+}
+
+/* ── Section eyebrow label ─────────────────────────────────────── */
+.section-eyebrow {
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-2);
+}
+
+/* ── Score chips ───────────────────────────────────────────────── */
+.score-chip {
+    display: inline-block;
+    padding: 0.13em 0.5em;
+    border-radius: 999px;
+    font-size: 0.67rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    background: rgba(95,136,168,0.08);
+    color: var(--text-2);
+    border: 1px solid rgba(95,136,168,0.16);
+}
+.score-chip.score-high { background: rgba(34,197,94,0.08);  color: #4ade80; border-color: rgba(34,197,94,0.22); }
+.score-chip.score-mid  { background: rgba(234,179,8,0.07);  color: #facc15; border-color: rgba(234,179,8,0.2); }
+.score-chip.score-low  { background: rgba(239,68,68,0.06);  color: #f87171; border-color: rgba(239,68,68,0.16); }
+
+/* ── Staging Area ──────────────────────────────────────────────── */
+.staging-area {
+    background: linear-gradient(135deg, rgba(140,28,28,0.06) 0%, var(--bg-card) 60%);
+    border: 1px solid rgba(140,28,28,0.2);
+    border-radius: var(--r);
+    padding: 1.25rem 1.5rem 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 0 0 1px rgba(140,28,28,0.06), var(--sh-sm);
+}
+.staging-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+.staging-header-left { display: flex; align-items: center; gap: 0.6rem; }
+.staging-header-right { display: flex; align-items: center; gap: 0.6rem; }
+.staging-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15em 0.6em;
+    border-radius: 999px;
+    font-size: 0.67rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    background: rgba(95,136,168,0.09);
+    color: var(--text-2);
+    border: 1px solid rgba(95,136,168,0.18);
+}
+.staging-count-active {
+    background: rgba(140,28,28,0.12);
+    color: var(--red-hi);
+    border-color: rgba(140,28,28,0.28);
+}
+.staging-body { margin-top: 0.25rem; }
+.staging-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.5rem;
+}
+.staging-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 0.65rem 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    transition: border-color 0.15s var(--ease);
+}
+.staging-card:hover { border-color: var(--border-hi); }
+.staging-card-title {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+.staging-card-company {
+    font-size: 0.74rem;
+    color: var(--text-2);
+    margin-top: 0.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.staging-empty-msg {
+    font-size: 0.85rem;
+    color: var(--text-3);
+    font-style: italic;
+}
+.staging-result { margin-top: 0.75rem; }
+
+/* ── Build button ──────────────────────────────────────────────── */
+.build-btn {
+    font-size: 0.82rem !important;
+    padding: 0.45rem 1.1rem !important;
+    margin: 0 !important;
+}
+.build-btn:not([disabled]):hover {
+    box-shadow: 0 4px 16px rgba(140,28,28,0.35) !important;
+}
+.build-btn[disabled] {
+    opacity: 0.38 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+}
+
+/* ── HTMX loading indicator ────────────────────────────────────── */
+.htmx-indicator { opacity: 0; transition: opacity 0.2s var(--ease); pointer-events: none; }
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator { opacity: 1; }
+.staging-spinner {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border: 2px solid rgba(196,56,56,0.22);
+    border-top-color: var(--red-hi);
+    border-radius: 50%;
+    animation: spin 0.65s linear infinite;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Job card meta row ─────────────────────────────────────────── */
+.job-meta-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0.5rem 0 0;
+}
+.meta-label {
+    font-size: 0.67rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-3);
+    flex-shrink: 0;
+}
+.meta-value {
+    font-size: 0.875rem;
+    color: var(--text);
+    line-height: 1.5;
+}
+
+/* ── Staging remove button ─────────────────────────────────────── */
+.staging-remove-btn {
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3rem;
+    height: 1.3rem;
+    border-radius: 50%;
+    font-size: 0.65rem;
+    color: var(--text-3);
+    background: transparent;
+    border: 1px solid transparent !important;
+    transition: color 0.15s var(--ease), background 0.15s var(--ease);
+    flex-shrink: 0;
+    padding: 0 !important;
+    margin: 0 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+.staging-remove-btn:hover {
+    color: var(--red-hi) !important;
+    background: rgba(140,28,28,0.12) !important;
+    border-color: rgba(140,28,28,0.2) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ── Profile gap section (on /apps cards) ──────────────────────── */
+.gap-section {
+    background: rgba(234,179,8,0.04);
+    border: 1px solid rgba(234,179,8,0.18);
+    border-radius: var(--r-sm);
+    padding: 0.75rem 0.9rem;
+    margin: 0.75rem 0 0.25rem;
+}
+.gap-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+}
+.gap-header-label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #fbbf24;
+}
+.gap-header-sub {
+    font-size: 0.78rem;
+    color: var(--text-2);
+}
+.gap-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding: 0.3rem 0;
+    border-top: 1px solid rgba(234,179,8,0.1);
+}
+.gap-item:first-of-type { border-top: none; }
+.gap-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 50%;
+    background: rgba(234,179,8,0.12);
+    color: #fbbf24;
+    font-size: 0.65rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+}
+.gap-question {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.4;
+}
+.gap-context {
+    font-size: 0.78rem;
+    color: var(--text-2);
+    margin-top: 0.1rem;
+    line-height: 1.4;
+}
+
+/* ── Browse section ────────────────────────────────────────────── */
+.jobs-browse-section { margin-top: 0; }
+.jobs-browse-section > .section-eyebrow {
+    display: block;
+    margin-bottom: 0.75rem;
+}
 """
 
 theme_headers = (Style(THEME_CSS),)

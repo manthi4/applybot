@@ -62,6 +62,6 @@ class ProfileGap:
 
 - **Depends on**: `models` (Job, Application), `llm` (all content generation), `profile` (user profile + resume parsing/generation), `config`
 - **Does not depend on**: Discovery, Tracking, or Dashboard
-- **Used by**: CLI/scheduler entry points, Dashboard (via DB)
+- **Used by**: Dashboard — the **"Build Approved Applications"** button on the Jobs page calls `prepare_all_approved()` directly via an HTMX POST to `/jobs/build-approved`. There is no Cloud Scheduler or background job for this step; it is always triggered manually by the user.
 - The preparer writes Application records to the database; tailor and answerer are stateless
 - Applications are created with status `READY_FOR_REVIEW` — human approval is required before submission
