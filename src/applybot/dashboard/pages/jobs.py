@@ -208,7 +208,7 @@ def _build_job_card(job: Job) -> Article:
 
 
 def register(rt: Any) -> None:
-    @rt("/jobs")
+    @rt("/jobs", methods=["get"])
     def get(status: str = "new", min_score: int = 0) -> tuple[object, ...]:
         # Always load approved jobs for the staging area (independent of browse filter)
         approved_jobs = query_jobs(status=JobStatus.APPROVED, limit=100)
@@ -272,7 +272,7 @@ def register(rt: Any) -> None:
             title="Job Queue",
         )
 
-    @rt("/jobs/build-approved")
+    @rt("/jobs/build-approved", methods=["post"])
     def post_build() -> object:
         """Trigger LLM application preparation for all approved jobs."""
         try:
@@ -298,7 +298,7 @@ def register(rt: Any) -> None:
         oob = _build_staging_area(new_approved, oob=True)
         return NotStr(str(result_alert) + str(oob))
 
-    @rt("/jobs/unstage-all")
+    @rt("/jobs/unstage-all", methods=["post"])
     def post_unstage_all() -> object:
         """Return all approved jobs back to NEW, clearing the staging area."""
         approved = query_jobs(status=JobStatus.APPROVED, limit=100)
@@ -306,7 +306,7 @@ def register(rt: Any) -> None:
             update_job(job.id, status=JobStatus.NEW)
         return _build_staging_area([])
 
-    @rt("/jobs/{job_id}/unapprove")
+    @rt("/jobs/{job_id}/unapprove", methods=["post"])
     def post_unapprove(job_id: str) -> object:
         """Return an approved job back to NEW, removing it from the staging area."""
         job = get_job(job_id)
@@ -316,7 +316,7 @@ def register(rt: Any) -> None:
         new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
         return _build_staging_area(new_approved)
 
-    @rt("/jobs/{job_id}/approve")
+    @rt("/jobs/{job_id}/approve", methods=["post"])
     def post(job_id: str) -> object:
         job = get_job(job_id)
         if job is None:
@@ -335,7 +335,7 @@ def register(rt: Any) -> None:
         oob = _build_staging_area(new_approved, oob=True)
         return NotStr(str(card) + str(oob))
 
-    @rt("/jobs/{job_id}/skip")
+    @rt("/jobs/{job_id}/skip", methods=["post"])
     def post_skip(job_id: str) -> object:
         job = get_job(job_id)
         if job is None:

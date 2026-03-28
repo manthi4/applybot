@@ -221,7 +221,7 @@ def _prefs_display(prefs: dict[str, Any]) -> Any:
 
 
 def register(rt: Any) -> None:  # noqa: C901
-    @rt("/profile")
+    @rt("/profile", methods=["get"])
     def get(msg: str = "", error: str = "") -> Any:
         profile = get_profile()
         p = profile or UserProfile(name="")
@@ -413,7 +413,7 @@ def register(rt: Any) -> None:  # noqa: C901
             title="Profile",
         )
 
-    @rt("/profile")
+    @rt("/profile", methods=["post"])
     def post_basic(
         name: str = "", email: str = "", summary: str = ""
     ) -> RedirectResponse:
@@ -426,7 +426,7 @@ def register(rt: Any) -> None:  # noqa: C901
         save_profile(profile)
         return RedirectResponse("/profile?msg=basic_saved", status_code=303)
 
-    @rt("/profile/resume")
+    @rt("/profile/resume", methods=["get"])
     def get_resume() -> Response:
         profile = get_profile()
         resume_path = (
@@ -449,7 +449,7 @@ def register(rt: Any) -> None:  # noqa: C901
             filename=resume_path.name,
         )
 
-    @rt("/profile/resume")
+    @rt("/profile/resume", methods=["post"])
     async def post_resume(request: Request) -> RedirectResponse:
         form = await request.form()
         upload = form.get("resume")
@@ -496,7 +496,7 @@ def register(rt: Any) -> None:  # noqa: C901
 
         return RedirectResponse("/profile?msg=resume_uploaded", status_code=303)
 
-    @rt("/profile/details")
+    @rt("/profile/details", methods=["post"])
     def post_details(
         skills: str = "",
         experiences: str = "",
