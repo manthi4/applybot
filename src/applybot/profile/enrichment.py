@@ -27,7 +27,6 @@ Given their existing profile and their newly uploaded resume, output an updated
 profile that incorporates any new or improved information from the resume.
 
 Rules:
-- Preserve all existing data — only add or improve, never remove content.
 - Do not change the 'id' or 'resume_path' fields.
 - If the profile already looks complete and the resume adds nothing new, return the profile unchanged.
 - Expand skills, experiences, and education from the resume if they are missing or incomplete in the profile.
