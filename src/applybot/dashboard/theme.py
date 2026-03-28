@@ -687,6 +687,50 @@ nav a { position: relative; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Inline job action buttons (approve / skip) ────────────────── */
+.job-inline-btn {
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.25rem 0.65rem !important;
+    border-radius: var(--r-sm);
+    white-space: nowrap;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease),
+                border-color 0.15s var(--ease);
+    flex-shrink: 0;
+    margin: 0 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+.job-inline-approve {
+    background: rgba(34,197,94,0.10);
+    color: #4ade80;
+    border: 1px solid rgba(34,197,94,0.25) !important;
+}
+.job-inline-approve:hover {
+    background: rgba(34,197,94,0.22) !important;
+    color: #86efac !important;
+    border-color: rgba(34,197,94,0.4) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+.job-inline-skip {
+    background: transparent;
+    color: var(--text-3);
+    border: 1px solid var(--border) !important;
+}
+.job-inline-skip:hover {
+    color: var(--text-2) !important;
+    border-color: var(--border-hi) !important;
+    background: rgba(95,136,168,0.06) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
 /* ── Job card meta row ─────────────────────────────────────────── */
 .job-meta-row {
     display: flex;

@@ -5,11 +5,22 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fasthtml.common import H1, H4, A, Article, Button, Div, NotStr, P, Small, Span
+from fasthtml.common import (
+    H1,
+    H4,
+    A,
+    Article,
+    Button,
+    Div,
+    NotStr,
+    P,
+    Small,
+    Span,
+    to_xml,
+)
 
 from applybot.application.preparer import prepare_all_approved
 from applybot.dashboard.components import (
-    action_buttons,
     alert,
     collapsible_text,
     confirmed_card,
@@ -54,6 +65,7 @@ def _build_staging_card(job: Job) -> Div:
                 hx_post=f"/jobs/{job.id}/unapprove",
                 hx_target="#staging-area",
                 hx_swap="outerHTML",
+                hx_include="#jobs-filter-form",
                 hx_confirm=f"Remove '{job.title}' from staging? It will return to New.",
                 cls="staging-remove-btn",
                 title="Remove from staging",
@@ -115,6 +127,7 @@ def _build_staging_area(approved_jobs: list[Job], *, oob: bool = False) -> Div:
                     hx_post="/jobs/unstage-all",
                     hx_target="#staging-area",
                     hx_swap="outerHTML",
+                    hx_include="#jobs-filter-form",
                     hx_confirm=(
                         f"Remove all {count} approved job{'s' if count != 1 else ''}"
                         " from staging? They will return to New."
@@ -150,6 +163,28 @@ def _build_job_card(job: Job) -> Article:
     status_str = job.status.value if hasattr(job.status, "value") else str(job.status)
     source_str = job.source.value if hasattr(job.source, "value") else str(job.source)
 
+    # Compact inline approve/skip for NEW jobs
+    inline_actions: list[object] = []
+    if job.status == JobStatus.NEW:
+        inline_actions = [
+            Button(
+                "Approve",
+                hx_post=f"/jobs/{job.id}/approve",
+                hx_target=f"#job-{job.id}",
+                hx_swap="outerHTML",
+                hx_include="#jobs-filter-form",
+                cls="job-inline-btn job-inline-approve",
+            ),
+            Button(
+                "Skip",
+                hx_post=f"/jobs/{job.id}/skip",
+                hx_target=f"#job-{job.id}",
+                hx_swap="outerHTML",
+                hx_include="#jobs-filter-form",
+                cls="job-inline-btn job-inline-skip",
+            ),
+        ]
+
     header = Div(
         Div(
             H4(job.title, style="margin:0 0 0.2rem 0;color:var(--text)"),
@@ -163,6 +198,7 @@ def _build_job_card(job: Job) -> Article:
         Div(
             _score_chip(job.relevance_score),
             status_badge(status_str),
+            *inline_actions,
             style="display:flex;align-items:center;gap:0.5rem;flex-shrink:0;margin-top:0.15rem",
         ),
         style="display:flex;align-items:flex-start;gap:1rem",
@@ -185,15 +221,6 @@ def _build_job_card(job: Job) -> Article:
             )
         )
 
-    actions: list[object] = []
-    if job.status == JobStatus.NEW:
-        actions.append(
-            action_buttons(
-                ("Approve", f"/jobs/{job.id}/approve", f"#job-{job.id}", ""),
-                ("Skip", f"/jobs/{job.id}/skip", f"#job-{job.id}", "secondary"),
-            )
-        )
-
     desc_section: list[object] = []
     if job.description:
         desc_section.append(collapsible_text("Description", job.description[:2000]))
@@ -201,10 +228,45 @@ def _build_job_card(job: Job) -> Article:
     return Article(
         header,
         *meta_parts,
-        *actions,
         *desc_section,
         id=f"job-{job.id}",
     )
+
+
+def _build_jobs_list(
+    status: str = "new",
+    min_score: int = 0,
+    *,
+    oob: bool = False,
+) -> Div:
+    """Render the browse-section job cards list (optionally as an OOB swap)."""
+    job_status: JobStatus | None = None
+    if status:
+        try:
+            job_status = JobStatus(status)
+        except ValueError:
+            pass
+
+    jobs = query_jobs(
+        status=job_status,
+        min_score=min_score if min_score > 0 else None,
+        limit=200,
+    )
+
+    status_label = job_status.value.capitalize() if job_status else "All"
+    count_text = P(
+        f"{len(jobs)} {status_label.lower()} job{'s' if len(jobs) != 1 else ''} found",
+        style="color:var(--text-2);font-size:0.85rem;margin:0.5rem 0 0.75rem",
+    )
+    cards = [_build_job_card(j) for j in jobs] or [
+        alert("No jobs found matching your filters.")
+    ]
+
+    extra_kwargs: dict[str, Any] = {}
+    if oob:
+        extra_kwargs["hx_swap_oob"] = "outerHTML"
+
+    return Div(count_text, *cards, id="jobs-list", **extra_kwargs)
 
 
 def register(rt: Any) -> None:
@@ -212,20 +274,6 @@ def register(rt: Any) -> None:
     def get(status: str = "new", min_score: int = 0) -> tuple[object, ...]:
         # Always load approved jobs for the staging area (independent of browse filter)
         approved_jobs = query_jobs(status=JobStatus.APPROVED, limit=100)
-
-        # Browse section: defaults to showing NEW jobs
-        job_status: JobStatus | None = None
-        if status:
-            try:
-                job_status = JobStatus(status)
-            except ValueError:
-                pass
-
-        jobs = query_jobs(
-            status=job_status,
-            min_score=min_score if min_score > 0 else None,
-            limit=200,
-        )
 
         staging = _build_staging_area(approved_jobs)
 
@@ -248,16 +296,10 @@ def register(rt: Any) -> None:
                     "max": 100,
                 },
             ],
+            form_id="jobs-filter-form",
         )
 
-        status_label = job_status.value.capitalize() if job_status else "All"
-        count_text = P(
-            f"{len(jobs)} {status_label.lower()} job{'s' if len(jobs) != 1 else ''} found",
-            style="color:var(--text-2);font-size:0.85rem;margin:0.5rem 0 0.75rem",
-        )
-        cards = [_build_job_card(j) for j in jobs] or [
-            alert("No jobs found matching your filters.")
-        ]
+        jobs_list = _build_jobs_list(status, min_score)
 
         return page(
             H1("Job Queue"),
@@ -265,8 +307,7 @@ def register(rt: Any) -> None:
             Div(
                 Span("Browse Jobs", cls="section-eyebrow"),
                 form,
-                count_text,
-                *cards,
+                jobs_list,
                 cls="jobs-browse-section",
             ),
             title="Job Queue",
@@ -296,18 +337,20 @@ def register(rt: Any) -> None:
         # OOB-refresh staging area (approved jobs are now in REVIEWING)
         new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
         oob = _build_staging_area(new_approved, oob=True)
-        return NotStr(str(result_alert) + str(oob))
+        return NotStr(to_xml(result_alert) + to_xml(oob))
 
-    @rt("/jobs/unstage-all", methods=["post"])
-    def post_unstage_all() -> object:
+    @rt("/jobs/unstage-all")
+    def post_unstage_all(status: str = "new", min_score: int = 0) -> object:
         """Return all approved jobs back to NEW, clearing the staging area."""
         approved = query_jobs(status=JobStatus.APPROVED, limit=100)
         for job in approved:
             update_job(job.id, status=JobStatus.NEW)
-        return _build_staging_area([])
+        staging = _build_staging_area([])
+        browse_oob = _build_jobs_list(status, min_score, oob=True)
+        return NotStr(to_xml(staging) + to_xml(browse_oob))
 
-    @rt("/jobs/{job_id}/unapprove", methods=["post"])
-    def post_unapprove(job_id: str) -> object:
+    @rt("/jobs/{job_id}/unapprove")
+    def post_unapprove(job_id: str, status: str = "new", min_score: int = 0) -> object:
         """Return an approved job back to NEW, removing it from the staging area."""
         job = get_job(job_id)
         if job is None:
@@ -316,10 +359,12 @@ def register(rt: Any) -> None:
             return alert(f"Job is {job.status.value}, not approved.", "error")
         update_job(job_id, status=JobStatus.NEW)
         new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
-        return _build_staging_area(new_approved)
+        staging = _build_staging_area(new_approved)
+        browse_oob = _build_jobs_list(status, min_score, oob=True)
+        return NotStr(to_xml(staging) + to_xml(browse_oob))
 
-    @rt("/jobs/{job_id}/approve", methods=["post"])
-    def post(job_id: str) -> object:
+    @rt("/jobs/{job_id}/approve")
+    def post(job_id: str, status: str = "new", min_score: int = 0) -> object:
         job = get_job(job_id)
         if job is None:
             return alert("Job not found.", "error")
@@ -332,15 +377,18 @@ def register(rt: Any) -> None:
             f"{job.title} at {job.company}",
             "Approved — added to staging",
         )
-        # OOB-refresh staging area so the new tile appears immediately
+        # OOB-refresh staging area and browse list
         new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
-        oob = _build_staging_area(new_approved, oob=True)
-        return NotStr(str(card) + str(oob))
+        staging_oob = _build_staging_area(new_approved, oob=True)
+        browse_oob = _build_jobs_list(status, min_score, oob=True)
+        return NotStr(to_xml(card) + to_xml(staging_oob) + to_xml(browse_oob))
 
-    @rt("/jobs/{job_id}/skip", methods=["post"])
-    def post_skip(job_id: str) -> object:
+    @rt("/jobs/{job_id}/skip")
+    def post_skip(job_id: str, status: str = "new", min_score: int = 0) -> object:
         job = get_job(job_id)
         if job is None:
             return alert("Job not found.", "error")
         update_job(job_id, status=JobStatus.SKIPPED)
-        return confirmed_card("job", job.id, f"{job.title} at {job.company}", "Skipped")
+        card = confirmed_card("job", job.id, f"{job.title} at {job.company}", "Skipped")
+        browse_oob = _build_jobs_list(status, min_score, oob=True)
+        return NotStr(to_xml(card) + to_xml(browse_oob))
