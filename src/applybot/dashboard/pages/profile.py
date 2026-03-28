@@ -33,12 +33,15 @@ from applybot.profile.resume import ResumeData, parse_resume
 
 logger = logging.getLogger(__name__)
 
+_MAX_RESUME_SIZE = 10 * 1024 * 1024  # 10 MB
+
 _FLASH_MESSAGES: dict[str, tuple[str, str]] = {
     "basic_saved": ("Basic profile info saved.", "success"),
     "resume_uploaded": ("Resume uploaded and parsed successfully.", "success"),
     "details_saved": ("Profile details saved.", "success"),
     "no_file": ("No file selected.", "error"),
     "invalid_docx": ("Please upload a .docx file.", "error"),
+    "file_too_large": ("Resume file is too large (max 10 MB).", "error"),
     "no_resume": ("No resume file found.", "error"),
     "parse_failed": ("Failed to parse resume.", "error"),
     "invalid_json": ("Invalid JSON in one or more fields.", "error"),
@@ -118,26 +121,33 @@ def _map_resume_to_profile(parsed: ResumeData, profile: UserProfile) -> None:
             kw in heading_lower
             for kw in ("skill", "technologies", "tools", "tech stack", "competenc")
         ):
-            if not profile.skills:
-                profile.skills = {section.heading: section.items}
+            if profile.skills is None:
+                profile.skills = {}
+            profile.skills[section.heading] = section.items
         elif any(
             kw in heading_lower
             for kw in ("experience", "employment", "work history", "career")
         ):
-            if not profile.experiences:
-                profile.experiences = [
-                    {"section": section.heading, "details": item}
-                    for item in section.items
-                ]
+            new_entries = [
+                {"section": section.heading, "details": item}
+                for item in section.items
+            ]
+            if profile.experiences is None:
+                profile.experiences = new_entries
+            else:
+                profile.experiences.extend(new_entries)
         elif any(
             kw in heading_lower
             for kw in ("education", "academic", "degree", "university", "school")
         ):
-            if not profile.education:
-                profile.education = [
-                    {"section": section.heading, "details": item}
-                    for item in section.items
-                ]
+            new_entries = [
+                {"section": section.heading, "details": item}
+                for item in section.items
+            ]
+            if profile.education is None:
+                profile.education = new_entries
+            else:
+                profile.education.extend(new_entries)
 
 
 def _field(label: str, value: Any) -> Div:
@@ -427,9 +437,11 @@ def register(rt: Any) -> None:  # noqa: C901
         if not filename.lower().endswith(".docx"):
             return RedirectResponse("/profile?error=invalid_docx", status_code=303)
 
-        content: bytes = await upload.read()
+        content: bytes = await upload.read(_MAX_RESUME_SIZE + 1)
         if not content:
             return RedirectResponse("/profile?error=no_file", status_code=303)
+        if len(content) > _MAX_RESUME_SIZE:
+            return RedirectResponse("/profile?error=file_too_large", status_code=303)
 
         data_dir = Path("data")
         data_dir.mkdir(parents=True, exist_ok=True)
