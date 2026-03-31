@@ -5,6 +5,7 @@ description = "AI-powered job application automation"
 requires-python = ">=3.12"
 dependencies = [
     "anthropic[vertex]>=0.40.0",
+    "google-genai>=1.0.0",
     "uvicorn>=0.32.0",
     "google-cloud-firestore>=2.19.0",
     "google-cloud-storage>=2.10.0",
