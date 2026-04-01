@@ -98,6 +98,10 @@ class GeminiClient(LLMClient):
                 temperature=temperature,
             ),
         )
+        if response.text is None:
+            raise ValueError(
+                "Gemini returned no text — response may have been blocked by safety filters"
+            )
         return str(response.text)
 
     def structured_output(
@@ -119,6 +123,10 @@ class GeminiClient(LLMClient):
                 max_output_tokens=max_tokens,
             ),
         )
+        if response.text is None:
+            raise ValueError(
+                "Gemini returned no text — response may have been blocked by safety filters"
+            )
         return output_type.model_validate_json(str(response.text))
 
 
@@ -170,6 +178,10 @@ class AnthropicClient(LLMClient):
         tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
     ) -> T:
+        """Forces Claude to call a named tool whose input_schema matches the Pydantic
+        model, guaranteeing schema-valid JSON without prompt hacks or markdown-fence
+        stripping.
+        """
         tool_name = "structured_output"
         kwargs: dict[str, Any] = {
             "model": self._model(tier),

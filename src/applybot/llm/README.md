@@ -48,8 +48,6 @@ Callers select model quality via the `tier` keyword argument (`"fast"` or `"smar
 - `ANTHROPIC_MODEL_FAST`, `ANTHROPIC_MODEL_SMART` — default `claude-sonnet-4-6`
 - `ANTHROPIC_MAX_RETRIES` — default `3`
 
-Pass `model=` to any method to override the default model for that call.
-
 ## Boundaries
 
 - **Depends on**: `config.py` (for provider selection and model settings)
