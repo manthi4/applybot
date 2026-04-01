@@ -4,21 +4,24 @@ Multi-provider LLM wrapper supporting Google Gemini and Anthropic Claude. Provid
 
 ## Files
 
-- **client.py** — `LLMClient` abstract base class, `GeminiClient`, `AnthropicClient`, and `llm` singleton
+- **client.py** — `LLMClient` abstract base class, `GeminiClient`, `AnthropicClient`, and `get_llm()` lazy singleton accessor
 
 ## Public API
 
 ```python
-from applybot.llm.client import llm
+from applybot.llm.client import get_llm
 
-# Simple text completion
-response: str = llm.complete(prompt, system="...", temperature=0.7)
+# Simple text completion (uses the fast model by default)
+response: str = get_llm().complete(prompt, system="...", temperature=0.7)
+
+# Use the smarter model for complex reasoning
+response: str = get_llm().complete(prompt, system="...", tier="smart")
 
 # Structured output parsed to a Pydantic model
-result: MyModel = llm.structured_output(prompt, output_type=MyModel, system="...")
+result: MyModel = get_llm().structured_output(prompt, output_type=MyModel, system="...", tier="smart")
 
 # Tool-use call — AnthropicClient only
-message = llm.with_tools(prompt, tools=[...], system="...")
+message = get_llm().with_tools(prompt, tools=[...], system="...")
 ```
 
 ### Configuration
@@ -27,19 +30,21 @@ The active backend is set by `settings.llm_provider` (env var `LLM_PROVIDER`):
 
 | Provider | Value | Auth |
 |---|---|---|
-| Google Gemini (default) | `"gemini"` | `GEMINI_API_KEY` env var |
+| Google Gemini (default) | `"gemini"` | Google ADC (service account) |
 | Anthropic Claude on Vertex | `"anthropic"` | Google ADC (service account) |
+
+Callers select model quality via the `tier` keyword argument (`"fast"` or `"smart"`, default `"fast"`). Each provider resolves the tier to its own configured model name — consumers never reference model strings directly.
 
 **Gemini settings** (env vars):
 - `LLM_PROVIDER=gemini` (default)
-- `GEMINI_API_KEY` — API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+- `GCP_PROJECT_ID`, `VERTEX_REGION` — Google Cloud project and Vertex AI region
 - `GEMINI_MODEL_FAST` — default `gemini-2.0-flash`
 - `GEMINI_MODEL_SMART` — default `gemini-2.5-pro`
-- Uses the `google-genai` SDK (`google-genai>=1.0.0`)
+- Uses the `google-genai` SDK (`google-genai>=1.0.0`) with Vertex AI
 
 **Anthropic/Claude settings** (env vars):
 - `LLM_PROVIDER=anthropic`
-- `GCP_PROJECT_ID`, `ANTHROPIC_REGION` — Google Cloud project and Vertex AI region
+- `GCP_PROJECT_ID`, `VERTEX_REGION` — Google Cloud project and Vertex AI region
 - `ANTHROPIC_MODEL_FAST`, `ANTHROPIC_MODEL_SMART` — default `claude-sonnet-4-6`
 - `ANTHROPIC_MAX_RETRIES` — default `3`
 

@@ -12,8 +12,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from applybot.config import settings
-from applybot.llm.client import llm
+from applybot.llm.client import get_llm
 from applybot.models.profile import UserProfile, save_profile, update_profile_fields
 
 logger = logging.getLogger(__name__)
@@ -76,11 +75,11 @@ def enrich_profile_with_llm(profile: UserProfile, resume_text: str) -> UserProfi
         "Output the updated user profile. Keep 'id' and 'resume_path' exactly as-is."
     )
 
-    updated = llm.structured_output(
+    updated = get_llm().structured_output(
         prompt,
         UserProfile,
         system=_SYSTEM_PROMPT,
-        model=settings.vertex_model_smart,
+        tier="smart",
     )
 
     # Always preserve identity/path fields and guard against a missing name

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,19 +10,20 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # LLM provider — "gemini" (Google AI Studio) or "anthropic" (Vertex AI)
-    llm_provider: str = "gemini"
+    # LLM provider — "gemini" (Vertex AI) or "anthropic" (Vertex AI)
+    llm_provider: Literal["gemini", "anthropic"] = "gemini"
 
-    # Gemini (Google AI Studio) — set GEMINI_API_KEY for Cloud Run / local
+    # Shared Vertex AI settings (both providers use Google ADC auth)
+    vertex_region: str = "us-east5"
+
+    # Gemini (Vertex AI)
     gemini_model_fast: str = "gemini-2.0-flash"
     gemini_model_smart: str = "gemini-2.5-pro"
-    gemini_api_key: str = ""
 
-    # Anthropic / Claude (Vertex AI) — kept for easy switching back
+    # Anthropic / Claude (Vertex AI)
     anthropic_model_fast: str = "claude-sonnet-4-6"
     anthropic_model_smart: str = "claude-sonnet-4-6"
     anthropic_max_retries: int = 3
-    anthropic_region: str = "us-east5"
 
     # Job scraping
     serpapi_key: str = ""

@@ -1,12 +1,9 @@
-import logging
 from abc import ABC, abstractmethod
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel
 
 from applybot.config import settings
-
-logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -15,7 +12,7 @@ class LLMClient(ABC):
     """Abstract base class for LLM provider backends.
 
     Concrete implementations: ``GeminiClient``, ``AnthropicClient``.
-    Use the module-level ``llm`` singleton rather than instantiating directly —
+    Use ``get_llm()`` rather than instantiating directly —
     the provider is selected via ``settings.llm_provider``.
     """
 
@@ -25,7 +22,7 @@ class LLMClient(ABC):
         prompt: str,
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
         temperature: float = 0.0,
     ) -> str:
@@ -38,7 +35,7 @@ class LLMClient(ABC):
         output_type: type[T],
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
     ) -> T:
         """Return a response parsed into a Pydantic model."""
@@ -49,7 +46,7 @@ class LLMClient(ABC):
         tools: list[dict[str, Any]],
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
     ) -> Any:
         """Send a message with tool definitions and return the raw response.
@@ -63,26 +60,37 @@ class LLMClient(ABC):
 
 
 class GeminiClient(LLMClient):
-    """Gemini backend via the ``google-genai`` SDK (API key auth)."""
+    """Gemini backend via the ``google-genai`` SDK (Vertex AI auth)."""
 
     def __init__(self) -> None:
         from google import genai
         from google.genai import types
 
-        self._client = genai.Client(api_key=settings.gemini_api_key)
+        self._client = genai.Client(
+            vertexai=True,
+            project=settings.gcp_project_id,
+            location=settings.vertex_region,
+        )
         self._types = types
+
+    def _model(self, tier: Literal["fast", "smart"]) -> str:
+        return (
+            settings.gemini_model_smart
+            if tier == "smart"
+            else settings.gemini_model_fast
+        )
 
     def complete(
         self,
         prompt: str,
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
         temperature: float = 0.0,
     ) -> str:
         response = self._client.models.generate_content(
-            model=model or settings.gemini_model_fast,
+            model=self._model(tier),
             contents=prompt,
             config=self._types.GenerateContentConfig(
                 system_instruction=system if system else None,
@@ -98,11 +106,11 @@ class GeminiClient(LLMClient):
         output_type: type[T],
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
     ) -> T:
         response = self._client.models.generate_content(
-            model=model or settings.gemini_model_fast,
+            model=self._model(tier),
             contents=prompt,
             config=self._types.GenerateContentConfig(
                 system_instruction=system if system else None,
@@ -122,8 +130,15 @@ class AnthropicClient(LLMClient):
 
         self._client = AnthropicVertex(
             project_id=settings.gcp_project_id,
-            region=settings.anthropic_region,
+            region=settings.vertex_region,
             max_retries=settings.anthropic_max_retries,
+        )
+
+    def _model(self, tier: Literal["fast", "smart"]) -> str:
+        return (
+            settings.anthropic_model_smart
+            if tier == "smart"
+            else settings.anthropic_model_fast
         )
 
     def complete(
@@ -131,12 +146,12 @@ class AnthropicClient(LLMClient):
         prompt: str,
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
         temperature: float = 0.0,
     ) -> str:
         kwargs: dict[str, Any] = {
-            "model": model or settings.anthropic_model_fast,
+            "model": self._model(tier),
             "max_tokens": max_tokens,
             "temperature": temperature,
             "messages": [{"role": "user", "content": prompt}],
@@ -152,12 +167,12 @@ class AnthropicClient(LLMClient):
         output_type: type[T],
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
     ) -> T:
         tool_name = "structured_output"
         kwargs: dict[str, Any] = {
-            "model": model or settings.anthropic_model_fast,
+            "model": self._model(tier),
             "max_tokens": max_tokens,
             "messages": [{"role": "user", "content": prompt}],
             "tools": [
@@ -189,11 +204,11 @@ class AnthropicClient(LLMClient):
         tools: list[dict[str, Any]],
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
     ) -> Any:
         kwargs: dict[str, Any] = {
-            "model": model or settings.anthropic_model_fast,
+            "model": self._model(tier),
             "max_tokens": max_tokens,
             "messages": [{"role": "user", "content": prompt}],
             "tools": tools,
@@ -206,12 +221,15 @@ class AnthropicClient(LLMClient):
 def _create_client() -> LLMClient:
     if settings.llm_provider == "gemini":
         return GeminiClient()
-    if settings.llm_provider == "anthropic":
-        return AnthropicClient()
-    raise ValueError(
-        f"Unknown llm_provider {settings.llm_provider!r}. Must be 'gemini' or 'anthropic'."
-    )
+    return AnthropicClient()
 
 
-# Module-level singleton for convenience
-llm: LLMClient = _create_client()
+_instance: LLMClient | None = None
+
+
+def get_llm() -> LLMClient:
+    """Return the shared LLMClient instance, creating it on first call."""
+    global _instance
+    if _instance is None:
+        _instance = _create_client()
+    return _instance

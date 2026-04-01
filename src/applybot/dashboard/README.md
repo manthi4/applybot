@@ -107,6 +107,6 @@ The FastHTML app (`applybot serve`) is hosted on **GCP Cloud Run**:
 ### Secrets
 
 All sensitive config is stored in GCP Secret Manager and mounted as environment variables in Cloud Run:
-- `VERTEX_REGION`
+- `VERTEX_REGION` (Vertex AI region — used by both Gemini and Anthropic providers)
 - `SERPAPI_KEY`
 - `GOOGLE_APPLICATION_CREDENTIALS` (Gmail OAuth)
