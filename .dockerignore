@@ -13,3 +13,5 @@ infra/
 .github/
 *.md
 !README.md
+# Cloud Function entry point — not needed in the Cloud Run image
+main.py
