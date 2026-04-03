@@ -8,8 +8,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from applybot.config import settings
-from applybot.llm.client import llm
+from applybot.llm.client import get_llm
 from applybot.models.job import Job
 from applybot.models.profile import UserProfile
 from applybot.profile.resume import (
@@ -143,11 +142,11 @@ Create a tailoring plan:
 - sections: For each resume section, provide the items list with rephrased content emphasizing job-relevant keywords. Use the reorder field to specify which items should come first (by original index).
 - notes: Any observations about the match quality."""
 
-    return llm.structured_output(
+    return get_llm().structured_output(
         prompt,
         TailoringPlan,
         system="You are an expert resume writer. You tailor resumes to specific jobs while maintaining complete honesty. You NEVER fabricate information.",
-        model=settings.vertex_model_smart,
+        tier="smart",
         max_tokens=4096,
     )
 

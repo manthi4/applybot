@@ -117,15 +117,14 @@ class TestRankJobs:
 
 
 class TestScoreBatch:
-    @patch("applybot.discovery.ranker.llm")
+    @patch("applybot.discovery.ranker.get_llm")
     @patch("applybot.discovery.ranker.settings")
-    def test_scores_all_jobs_in_batch(self, mock_settings, mock_llm):
-        mock_settings.vertex_model_fast = "test-model"
+    def test_scores_all_jobs_in_batch(self, mock_settings, mock_get_llm):
         jobs = [
             make_raw_job(title="ML Engineer", url="https://a.com/1"),
             make_raw_job(title="Data Scientist", url="https://b.com/1"),
         ]
-        mock_llm.structured_output.return_value = BatchScoreResult(
+        mock_get_llm.return_value.structured_output.return_value = BatchScoreResult(
             scores=[
                 JobScore(job_index=0, score=85, reasoning="Strong ML match"),
                 JobScore(job_index=1, score=60, reasoning="Partial match"),
@@ -137,16 +136,15 @@ class TestScoreBatch:
         assert result[0][1] == 85
         assert result[1][1] == 60
 
-    @patch("applybot.discovery.ranker.llm")
+    @patch("applybot.discovery.ranker.get_llm")
     @patch("applybot.discovery.ranker.settings")
-    def test_missing_index_gets_neutral_score(self, mock_settings, mock_llm):
-        mock_settings.vertex_model_fast = "test-model"
+    def test_missing_index_gets_neutral_score(self, mock_settings, mock_get_llm):
         jobs = [
             make_raw_job(title="Job A", url="https://a.com/1"),
             make_raw_job(title="Job B", url="https://b.com/1"),
         ]
         # LLM only returns score for index 0, omits index 1
-        mock_llm.structured_output.return_value = BatchScoreResult(
+        mock_get_llm.return_value.structured_output.return_value = BatchScoreResult(
             scores=[JobScore(job_index=0, score=80, reasoning="Good")]
         )
 
@@ -156,12 +154,11 @@ class TestScoreBatch:
         assert scored_titles["Job A"] == 80
         assert scored_titles["Job B"] == 50  # Neutral fallback
 
-    @patch("applybot.discovery.ranker.llm")
+    @patch("applybot.discovery.ranker.get_llm")
     @patch("applybot.discovery.ranker.settings")
-    def test_out_of_range_index_ignored(self, mock_settings, mock_llm):
-        mock_settings.vertex_model_fast = "test-model"
+    def test_out_of_range_index_ignored(self, mock_settings, mock_get_llm):
         jobs = [make_raw_job(url="https://a.com/1")]
-        mock_llm.structured_output.return_value = BatchScoreResult(
+        mock_get_llm.return_value.structured_output.return_value = BatchScoreResult(
             scores=[
                 JobScore(job_index=0, score=80, reasoning="Good"),
                 JobScore(job_index=99, score=90, reasoning="Ghost job"),
@@ -172,18 +169,17 @@ class TestScoreBatch:
         assert len(result) == 1
         assert result[0][1] == 80
 
-    @patch("applybot.discovery.ranker.llm")
+    @patch("applybot.discovery.ranker.get_llm")
     @patch("applybot.discovery.ranker.settings")
-    def test_truncates_long_descriptions(self, mock_settings, mock_llm):
-        mock_settings.vertex_model_fast = "test-model"
+    def test_truncates_long_descriptions(self, mock_settings, mock_get_llm):
         long_desc = "x" * 5000
         jobs = [make_raw_job(description=long_desc, url="https://a.com/1")]
-        mock_llm.structured_output.return_value = BatchScoreResult(
+        mock_get_llm.return_value.structured_output.return_value = BatchScoreResult(
             scores=[JobScore(job_index=0, score=50, reasoning="Ok")]
         )
 
         _score_batch(jobs, "profile")
-        prompt = mock_llm.structured_output.call_args[0][0]
+        prompt = mock_get_llm.return_value.structured_output.call_args[0][0]
         # Description in prompt should be truncated to 1500 chars
         assert "x" * 1501 not in prompt
 

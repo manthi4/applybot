@@ -80,7 +80,7 @@ updated: UserProfile = enrich_profile_with_llm(profile, resume_text)
 asyncio.create_task(enrich_profile_with_llm_async(profile, resume_text))
 ```
 
-The LLM is instructed to preserve existing data and only add or improve. It uses `vertex_model_smart` from settings. If enrichment fails, the heuristic-parsed profile written earlier remains in Firestore, and a persistent `enrichment_warning` field is set on the profile so the dashboard can show the user an explicit warning.
+The LLM is instructed to preserve existing data and only add or improve. It calls `get_llm()` with `tier="smart"`, routing to the configured provider's smart model. If enrichment fails, the heuristic-parsed profile written earlier remains in Firestore, and a persistent `enrichment_warning` field is set on the profile so the dashboard can show the user an explicit warning.
 
 ### CLI Bootstrap
 

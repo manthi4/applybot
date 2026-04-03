@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from applybot.config import settings
-from applybot.llm.client import llm
+from applybot.llm.client import get_llm
 from applybot.models.application import (
     ApplicationStatus,
     UpdateSource,
@@ -181,7 +181,7 @@ Determine:
 3. How confident are you? (0.0-1.0)"""
 
     try:
-        result = llm.structured_output(
+        result = get_llm().structured_output(
             prompt,
             EmailClassification,
             system="You classify job application emails. Be conservative — only classify with high confidence.",

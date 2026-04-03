@@ -10,9 +10,9 @@ variable "region" {
 }
 
 variable "vertex_region" {
-  description = "Vertex AI region for Claude model access (use 'global' for the global endpoint, or a specific region like us-east5, europe-west1, asia-southeast1)"
+  description = "Vertex AI region for LLM access — used by both Gemini (google-genai SDK) and Anthropic Claude (anthropic Vertex SDK). Use a specific region like us-east5, us-central1, europe-west1."
   type        = string
-  default     = "global"
+  default     = "us-east5"
 }
 
 variable "serpapi_key" {

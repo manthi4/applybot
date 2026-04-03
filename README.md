@@ -306,11 +306,15 @@ DISCOVERY_MAX_JOBS_PER_RUN=100
 # Application limits
 MAX_APPLICATIONS_PER_DAY=10
 
-# LLM models (Vertex AI)
-VERTEX_MODEL_FAST=claude-sonnet-4-6-20260301     # Cost-efficient tasks
-VERTEX_MODEL_SMART=claude-sonnet-4-6-20260301    # Complex reasoning
-VERTEX_MAX_RETRIES=3
-VERTEX_REGION=us-east5                           # Vertex AI region for Claude
+# LLM models
+LLM_PROVIDER=gemini                          # gemini (default) or anthropic
+VERTEX_REGION=us-east5                       # Vertex AI region (both providers)
+GEMINI_MODEL_FAST=gemini-2.0-flash           # Cost-efficient tasks
+GEMINI_MODEL_SMART=gemini-2.5-pro            # Complex reasoning
+# To switch to Claude on Vertex AI instead:
+# LLM_PROVIDER=anthropic
+# ANTHROPIC_MODEL_FAST=claude-sonnet-4-6
+# ANTHROPIC_MODEL_SMART=claude-sonnet-4-6
 ```
 
 ---

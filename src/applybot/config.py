@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,11 +10,20 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # LLM (Vertex AI)
-    vertex_model_fast: str = "claude-sonnet-4-6"
-    vertex_model_smart: str = "claude-sonnet-4-6"
-    vertex_max_retries: int = 3
+    # LLM provider — "gemini" (Vertex AI) or "anthropic" (Vertex AI)
+    llm_provider: Literal["gemini", "anthropic"] = "gemini"
+
+    # Shared Vertex AI settings (both providers use Google ADC auth)
     vertex_region: str = "us-east5"
+
+    # Gemini (Vertex AI)
+    gemini_model_fast: str = "gemini-2.0-flash"
+    gemini_model_smart: str = "gemini-2.5-pro"
+
+    # Anthropic / Claude (Vertex AI)
+    anthropic_model_fast: str = "claude-sonnet-4-6"
+    anthropic_model_smart: str = "claude-sonnet-4-6"
+    anthropic_max_retries: int = 3
 
     # Job scraping
     serpapi_key: str = ""

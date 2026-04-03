@@ -1,25 +1,83 @@
-import logging
-from typing import Any, TypeVar, cast
+from abc import ABC, abstractmethod
+from typing import Any, Literal, TypeVar
 
-import anthropic
-from anthropic import AnthropicVertex
 from pydantic import BaseModel
 
 from applybot.config import settings
 
-logger = logging.getLogger(__name__)
-
 T = TypeVar("T", bound=BaseModel)
 
 
-class LLMClient:
-    """Thin wrapper around the Anthropic SDK with tool-use and structured output."""
+class LLMClient(ABC):
+    """Abstract base class for LLM provider backends.
+
+    Concrete implementations: ``GeminiClient``, ``AnthropicClient``.
+    Use ``get_llm()`` rather than instantiating directly —
+    the provider is selected via ``settings.llm_provider``.
+    """
+
+    @abstractmethod
+    def complete(
+        self,
+        prompt: str,
+        *,
+        system: str = "",
+        tier: Literal["fast", "smart"] = "fast",
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+    ) -> str:
+        """Simple text completion — returns the assistant's text response."""
+
+    @abstractmethod
+    def structured_output(
+        self,
+        prompt: str,
+        output_type: type[T],
+        *,
+        system: str = "",
+        tier: Literal["fast", "smart"] = "fast",
+        max_tokens: int = 4096,
+    ) -> T:
+        """Return a response parsed into a Pydantic model."""
+
+    def with_tools(
+        self,
+        prompt: str,
+        tools: list[dict[str, Any]],
+        *,
+        system: str = "",
+        tier: Literal["fast", "smart"] = "fast",
+        max_tokens: int = 4096,
+    ) -> Any:
+        """Send a message with tool definitions and return the raw response.
+
+        Not supported by all providers — raises ``NotImplementedError`` by default.
+        Override in subclasses that support tool use (e.g. ``AnthropicClient``).
+        """
+        raise NotImplementedError(
+            f"with_tools() is not supported by {type(self).__name__}."
+        )
+
+
+class GeminiClient(LLMClient):
+    """Gemini backend via the ``google-genai`` SDK (Vertex AI auth)."""
 
     def __init__(self) -> None:
-        self._client = AnthropicVertex(
-            project_id=settings.gcp_project_id,
-            region=settings.vertex_region,
-            max_retries=settings.vertex_max_retries,
+        from google import genai
+        from google.genai import types
+
+        self._client = genai.Client(
+            vertexai=True,
+            project=settings.gcp_project_id,
+            location=settings.vertex_region,
+        )
+        self._types = types
+
+    def _model(self, tier: Literal["fast", "smart"]) -> str:
+        return (
+            settings.gemini_model_smart
+            if tier == "smart"
+            else settings.gemini_model_fast
         )
 
     def complete(
@@ -27,23 +85,24 @@ class LLMClient:
         prompt: str,
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
         temperature: float = 0.0,
     ) -> str:
-        """Simple text completion — returns the assistant's text response."""
-        model = model or settings.vertex_model_fast
-        messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "messages": messages,
-        }
-        if system:
-            kwargs["system"] = system
-        response = self._client.messages.create(**kwargs)
-        return self._extract_text(response)
+        response = self._client.models.generate_content(
+            model=self._model(tier),
+            contents=prompt,
+            config=self._types.GenerateContentConfig(
+                system_instruction=system if system else None,
+                max_output_tokens=max_tokens,
+                temperature=temperature,
+            ),
+        )
+        if response.text is None:
+            raise ValueError(
+                "Gemini returned no text — response may have been blocked by safety filters"
+            )
+        return str(response.text)
 
     def structured_output(
         self,
@@ -51,35 +110,96 @@ class LLMClient:
         output_type: type[T],
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
     ) -> T:
-        """Get a response parsed into a Pydantic model via forced tool use.
+        response = self._client.models.generate_content(
+            model=self._model(tier),
+            contents=prompt,
+            config=self._types.GenerateContentConfig(
+                system_instruction=system if system else None,
+                response_mime_type="application/json",
+                response_schema=output_type,
+                max_output_tokens=max_tokens,
+            ),
+        )
+        if response.text is None:
+            raise ValueError(
+                "Gemini returned no text — response may have been blocked by safety filters"
+            )
+        return output_type.model_validate_json(str(response.text))
 
-        Forces Claude to call a tool whose input_schema matches the Pydantic
-        model, guaranteeing schema-valid JSON without any prompt hacks or
-        markdown-fence stripping.
-        """
-        model = model or settings.vertex_model_fast
-        tool_name = "structured_output"
-        tools: list[dict[str, Any]] = [
-            {
-                "name": tool_name,
-                "description": f"Return a structured {output_type.__name__} object.",
-                "strict": True,
-                "input_schema": output_type.model_json_schema(),
-            }
-        ]
+
+class AnthropicClient(LLMClient):
+    """Anthropic Claude backend via the Vertex AI SDK (ADC auth)."""
+
+    def __init__(self) -> None:
+        from anthropic import AnthropicVertex
+
+        self._client = AnthropicVertex(
+            project_id=settings.gcp_project_id,
+            region=settings.vertex_region,
+            max_retries=settings.anthropic_max_retries,
+        )
+
+    def _model(self, tier: Literal["fast", "smart"]) -> str:
+        return (
+            settings.anthropic_model_smart
+            if tier == "smart"
+            else settings.anthropic_model_fast
+        )
+
+    def complete(
+        self,
+        prompt: str,
+        *,
+        system: str = "",
+        tier: Literal["fast", "smart"] = "fast",
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+    ) -> str:
         kwargs: dict[str, Any] = {
-            "model": model,
+            "model": self._model(tier),
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system:
+            kwargs["system"] = system
+        response: Any = self._client.messages.create(**kwargs)
+        return "\n".join(b.text for b in response.content if b.type == "text")
+
+    def structured_output(
+        self,
+        prompt: str,
+        output_type: type[T],
+        *,
+        system: str = "",
+        tier: Literal["fast", "smart"] = "fast",
+        max_tokens: int = 4096,
+    ) -> T:
+        """Forces Claude to call a named tool whose input_schema matches the Pydantic
+        model, guaranteeing schema-valid JSON without prompt hacks or markdown-fence
+        stripping.
+        """
+        tool_name = "structured_output"
+        kwargs: dict[str, Any] = {
+            "model": self._model(tier),
             "max_tokens": max_tokens,
             "messages": [{"role": "user", "content": prompt}],
-            "tools": tools,
+            "tools": [
+                {
+                    "name": tool_name,
+                    "description": f"Return a structured {output_type.__name__} object.",
+                    "strict": True,
+                    "input_schema": output_type.model_json_schema(),
+                }
+            ],
             "tool_choice": {"type": "tool", "name": tool_name},
         }
         if system:
             kwargs["system"] = system
-        response = cast(anthropic.types.Message, self._client.messages.create(**kwargs))
+        response: Any = self._client.messages.create(**kwargs)
 
         tool_use_block = next(
             (b for b in response.content if b.type == "tool_use"), None
@@ -88,7 +208,6 @@ class LLMClient:
             raise ValueError(
                 f"structured_output: expected a tool_use block in response, got: {response.content}"
             )
-
         return output_type.model_validate(tool_use_block.input)
 
     def with_tools(
@@ -97,30 +216,32 @@ class LLMClient:
         tools: list[dict[str, Any]],
         *,
         system: str = "",
-        model: str | None = None,
+        tier: Literal["fast", "smart"] = "fast",
         max_tokens: int = 4096,
-    ) -> anthropic.types.Message:
-        """Send a message with tool definitions, returning the full Message
-        so callers can inspect tool_use blocks and continue the conversation."""
-        model = model or settings.vertex_model_fast
+    ) -> Any:
         kwargs: dict[str, Any] = {
-            "model": model,
+            "model": self._model(tier),
             "max_tokens": max_tokens,
             "messages": [{"role": "user", "content": prompt}],
             "tools": tools,
         }
         if system:
             kwargs["system"] = system
-        return cast(anthropic.types.Message, self._client.messages.create(**kwargs))
-
-    @staticmethod
-    def _extract_text(response: anthropic.types.Message) -> str:
-        parts: list[str] = []
-        for block in response.content:
-            if block.type == "text":
-                parts.append(block.text)
-        return "\n".join(parts)
+        return self._client.messages.create(**kwargs)
 
 
-# Module-level singleton for convenience
-llm = LLMClient()
+def _create_client() -> LLMClient:
+    if settings.llm_provider == "gemini":
+        return GeminiClient()
+    return AnthropicClient()
+
+
+_instance: LLMClient | None = None
+
+
+def get_llm() -> LLMClient:
+    """Return the shared LLMClient instance, creating it on first call."""
+    global _instance
+    if _instance is None:
+        _instance = _create_client()
+    return _instance

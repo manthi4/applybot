@@ -6,7 +6,7 @@ import logging
 
 from pydantic import BaseModel
 
-from applybot.llm.client import llm
+from applybot.llm.client import get_llm
 from applybot.models.profile import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ Profile:
 Return only the queries as a JSON object with a "queries" key containing a list of strings."""
 
     try:
-        result = llm.structured_output(
+        result = get_llm().structured_output(
             prompt,
             GeneratedQueries,
             system="You are a job search expert. Generate precise, effective search queries.",
