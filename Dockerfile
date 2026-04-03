@@ -22,8 +22,8 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code
-COPY src/ src/
+# docker-entrypoint.sh is the only runtime file needed; applybot package is
+# already installed into site-packages via the builder stage above.
 COPY docker-entrypoint.sh .
 
 RUN chmod +x docker-entrypoint.sh
