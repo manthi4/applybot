@@ -46,6 +46,8 @@ class Job(BaseModel):
     relevance_score: float | None = None
     relevance_reasoning: str = ""
     status: JobStatus = JobStatus.NEW
+    hard_requirements: list[str] = Field(default_factory=list)
+    application_questions: list[str] = Field(default_factory=list)
 
     def __repr__(self) -> str:
         return f"<Job {self.id}: {self.title} @ {self.company}>"

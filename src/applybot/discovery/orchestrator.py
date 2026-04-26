@@ -10,6 +10,7 @@ from typing import Any
 
 from applybot.config import settings
 from applybot.discovery.deduplicator import deduplicate
+from applybot.discovery.enricher import enrich_job
 from applybot.discovery.query_builder import build_search_queries
 from applybot.discovery.ranker import rank_jobs
 from applybot.discovery.scrapers.base import BaseScraper, RawJob
@@ -189,6 +190,7 @@ def _save_jobs(ranked: list[tuple[RawJob, int, str]]) -> int:
             relevance_reasoning=reasoning,
             status=JobStatus.NEW,
         )
+        job = enrich_job(raw_job, job)
         new_jobs.append(job)
         existing_urls.add(raw_job.url)
 

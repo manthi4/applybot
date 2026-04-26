@@ -1,6 +1,6 @@
 # Discovery
 
-Automated job search pipeline: generates queries from the user profile, scrapes multiple job boards in parallel, deduplicates results, ranks by relevance using Claude, and saves new jobs to the database.
+Automated job search pipeline: generates queries from the user profile, scrapes multiple job boards in parallel, deduplicates results, ranks by relevance using Claude, enriches each saved job with LLM-extracted fields, and saves new jobs to the database.
 
 ## Files
 
@@ -8,6 +8,7 @@ Automated job search pipeline: generates queries from the user profile, scrapes 
 - **query_builder.py** — `build_search_queries()` — LLM-powered query generation
 - **deduplicator.py** — `deduplicate()` — fuzzy matching + URL normalization
 - **ranker.py** — `rank_jobs()` — Claude batch-scoring (0-100)
+- **enricher.py** — `enrich_job()` — LLM verification and field extraction per job
 - **scrapers/** — pluggable scraper implementations
 
 ### Scrapers
