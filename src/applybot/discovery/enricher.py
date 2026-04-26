@@ -82,9 +82,9 @@ Return the verified fields and all extracted data."""
             system=_SYSTEM,
             tier="fast",
         )
-        job.title = enrichment.title
-        job.company = enrichment.company
-        job.location = enrichment.location
+        job.title = enrichment.title.strip() or job.title
+        job.company = enrichment.company.strip() or job.company
+        job.location = enrichment.location.strip() or job.location
         job.hard_requirements = enrichment.hard_requirements
         job.application_questions = enrichment.application_questions
         logger.debug(
