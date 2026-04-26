@@ -120,7 +120,7 @@ def _get_tailoring_plan(
     prompt = f"""You are tailoring a resume for a specific job application.
 
 CRITICAL RULES:
-1. You may ONLY rephrase or reorder existing content from the resume and profile.
+1. You may ONLY use existing content from the resume and profile.
 2. You must NOT fabricate any experiences, skills, projects, or achievements.
 3. Emphasize the most relevant existing experiences and skills.
 4. Adjust wording to use keywords from the job description where truthful.
