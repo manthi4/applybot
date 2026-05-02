@@ -847,6 +847,71 @@ nav a { position: relative; }
     display: block;
     margin-bottom: 0.75rem;
 }
+
+/* -- Application card sections --------------------------------------------- */
+.app-section {
+    padding: 0.9rem 0;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+}
+.app-section:last-child { border-bottom: none; }
+.app-section h4 {
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--pico-muted-color);
+    margin: 0 0 0.5rem;
+}
+
+/* -- Cover letter pre block ------------------------------------------------- */
+.cover-letter-pre {
+    white-space: pre-wrap;
+    font-size: 0.85em;
+    background: var(--pico-code-background, #030810);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    line-height: 1.65;
+    margin: 0 0 0.5rem;
+}
+
+/* -- Q&A items -------------------------------------------------------------- */
+.qa-item {
+    margin-bottom: 0.75rem;
+}
+.qa-item label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+.qa-item textarea {
+    width: 100%;
+    resize: vertical;
+}
+.qa-save-btn {
+    font-size: 0.82rem !important;
+    padding: 0.4rem 1rem !important;
+    margin: 0 !important;
+}
+
+/* -- Resume section row ----------------------------------------------------- */
+.resume-section {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.resume-download {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+/* -- Re-tailor button ------------------------------------------------------- */
+.retailor-btn {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.9rem !important;
+    margin: 0 !important;
+}
 """
 
 theme_headers = (Style(THEME_CSS),)

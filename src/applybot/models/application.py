@@ -16,7 +16,6 @@ STATUS_UPDATES_COLLECTION = "application_status_updates"
 
 
 class ApplicationStatus(str, enum.Enum):
-    DRAFT = "draft"
     READY_FOR_REVIEW = "ready_for_review"
     APPROVED = "approved"
     SUBMITTED = "submitted"
@@ -42,7 +41,7 @@ class Application(BaseModel):
     cover_letter: str = ""
     answers: dict[str, Any] = Field(default_factory=dict)
     profile_gaps: list[dict[str, str]] = Field(default_factory=list)
-    status: ApplicationStatus = ApplicationStatus.DRAFT
+    status: ApplicationStatus = ApplicationStatus.READY_FOR_REVIEW
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     submitted_at: datetime | None = None
 
