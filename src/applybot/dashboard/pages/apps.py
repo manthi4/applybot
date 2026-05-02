@@ -15,7 +15,6 @@ from fasthtml.common import (
     Input,
     Label,
     P,
-    Pre,
     Small,
     Span,
     Strong,
@@ -80,29 +79,11 @@ def _build_gap_section(gaps: list[dict[str, str]]) -> Div:
     )
 
 
-# -- Cover-letter fragments ---------------------------------------------------
+# -- Cover-letter fragment ---------------------------------------------------
 
 
-def _cover_letter_display(app_id: str, cover_letter: str) -> Div:
-    """Cover-letter section in read mode."""
-    return Div(
-        H4("Cover Letter"),
-        Pre(cover_letter or "(none)", cls="cover-letter-pre"),
-        Button(
-            "Edit",
-            hx_get=f"/apps/{app_id}/cover-letter/edit",
-            hx_target=f"#cover-letter-section-{app_id}",
-            hx_swap="outerHTML",
-            cls="secondary outline",
-            style="margin-top:0.5rem",
-        ),
-        id=f"cover-letter-section-{app_id}",
-        cls="app-section",
-    )
-
-
-def _cover_letter_edit(app_id: str, cover_letter: str) -> Div:
-    """Cover-letter section in edit (form) mode."""
+def _cover_letter_section(app_id: str, cover_letter: str) -> Div:
+    """Cover-letter section — always editable, matching Q&A UX."""
     return Div(
         H4("Cover Letter"),
         Form(
@@ -114,22 +95,14 @@ def _cover_letter_edit(app_id: str, cover_letter: str) -> Div:
             ),
             Div(
                 Button(
-                    "Save",
+                    "Save Cover Letter",
                     type="submit",
                     hx_post=f"/apps/{app_id}/cover-letter",
                     hx_target=f"#cover-letter-section-{app_id}",
                     hx_swap="outerHTML",
                     hx_include="closest form",
+                    cls="qa-save-btn secondary",
                 ),
-                Button(
-                    "Cancel",
-                    type="button",
-                    hx_get=f"/apps/{app_id}/cover-letter/view",
-                    hx_target=f"#cover-letter-section-{app_id}",
-                    hx_swap="outerHTML",
-                    cls="secondary outline",
-                ),
-                style="display:flex;gap:0.5rem;margin-top:0.5rem",
             ),
         ),
         id=f"cover-letter-section-{app_id}",
@@ -293,7 +266,7 @@ def _build_app_card(application: Application, job: Job | None) -> object:
     sections: list[object] = [
         details_section,
         _resume_section(application),
-        _cover_letter_display(app_id, application.cover_letter),
+        _cover_letter_section(app_id, application.cover_letter),
         _qa_section(application),
     ]
     if actions_sec is not None:
@@ -352,21 +325,7 @@ def register(rt: Any) -> None:
         except (ValueError, InvalidTransitionError) as e:
             return alert(str(e), "error")
 
-    # -- Cover-letter edit/save -----------------------------------------------
-
-    @rt("/apps/{app_id}/cover-letter/edit", methods=["get"])
-    def get_cover_letter_edit(app_id: str) -> object:
-        app = get_application(app_id)
-        if app is None:
-            return alert(f"Application {app_id} not found.", "error")
-        return _cover_letter_edit(app_id, app.cover_letter)
-
-    @rt("/apps/{app_id}/cover-letter/view", methods=["get"])
-    def get_cover_letter_view(app_id: str) -> object:
-        app = get_application(app_id)
-        if app is None:
-            return alert(f"Application {app_id} not found.", "error")
-        return _cover_letter_display(app_id, app.cover_letter)
+    # -- Cover-letter save ----------------------------------------------------
 
     @rt("/apps/{app_id}/cover-letter", methods=["post"])
     def post_cover_letter(app_id: str, cover_letter: str = "") -> object:
@@ -374,7 +333,13 @@ def register(rt: Any) -> None:
         if app is None:
             return alert(f"Application {app_id} not found.", "error")
         update_application(app_id, cover_letter=cover_letter)
-        return _cover_letter_display(app_id, cover_letter)
+        return Div(
+            _cover_letter_section(app_id, cover_letter),
+            P(
+                "Cover letter saved.",
+                style="font-size:0.8em;color:#4ade80;margin:0.25rem 0 0",
+            ),
+        )
 
     # -- Q&A answers save -----------------------------------------------------
 
