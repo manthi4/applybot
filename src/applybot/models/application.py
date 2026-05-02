@@ -77,6 +77,9 @@ def _app_to_doc(app: Application) -> dict[str, Any]:
 def _doc_to_app(doc: Any) -> Application:
     """Convert a Firestore document snapshot to an Application."""
     data = doc.to_dict()
+    # Migrate legacy "draft" status — removed from enum, treat as ready_for_review
+    if data.get("status") == "draft":
+        data["status"] = ApplicationStatus.READY_FOR_REVIEW.value
     return Application(id=doc.id, **data)
 
 
