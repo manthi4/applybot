@@ -18,7 +18,7 @@ from applybot.models.job import (
     get_all_job_urls,
     get_job,
 )
-from applybot.models.profile import UserProfile, get_profile, save_profile
+from applybot.models.profile import ContactInfo, UserProfile, get_profile, save_profile
 
 
 class TestJobModel:
@@ -81,7 +81,7 @@ class TestUserProfileModel:
     def test_create_profile(self):
         profile = UserProfile(
             name="Test User",
-            email="test@example.com",
+            contact_info=ContactInfo(email="test@example.com"),
             summary="ML engineer with 5 years experience",
             skills={"technical": ["Python", "PyTorch", "ROS"]},
             experiences=[
@@ -96,6 +96,7 @@ class TestUserProfileModel:
 
         assert profile.id != ""
         assert profile.name == "Test User"
+        assert profile.contact_info.email == "test@example.com"
         assert "Python" in profile.skills["technical"]
 
     def test_profile_json_fields(self):

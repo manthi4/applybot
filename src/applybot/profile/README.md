@@ -64,11 +64,11 @@ Parsing is purely heuristic — no LLM is involved. Each format uses text extrac
 5. Lines that *contain* a known multi-word phrase such as `"programming languages"`
    (handles headings like "Familiar Programming Languages and Software").
 
-Sections are mapped to profile fields via `_map_resume_to_profile()` in `dashboard/pages/profile.py` by keyword matching: headings containing "skill/technologies/tools" → `skills`, "experience/employment/work history/career" → `experiences`, "education/academic/degree/university/school" → `education`.
+Sections are mapped to profile fields via `_map_resume_to_profile()` in `dashboard/pages/profile.py` by keyword matching: headings containing "skill/technologies/tools" → `skills`, "experience/employment/work history/career" → `experiences`, "education/academic/degree/university/school" → `education`. The raw contact line is also scanned with a regex to extract an email address into `contact_info.email`.
 
 #### LLM enrichment (post-parse)
 
-After the heuristic pass saves the profile, the upload handler fires an async background task that calls the LLM to review the existing profile + parsed resume and write back a more complete profile. See `enrichment.py`.
+After the heuristic pass saves the profile, the upload handler fires an async background task that calls the LLM to review the existing profile + parsed resume and write back a more complete profile. The LLM also extracts and populates all four `contact_info` fields (email, linkedin, phone, github) from the resume text. See `enrichment.py`.
 
 ```python
 from applybot.profile.enrichment import enrich_profile_with_llm, enrich_profile_with_llm_async

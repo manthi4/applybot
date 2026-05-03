@@ -37,7 +37,8 @@ from applybot.models.application import ApplicationStatus, UpdateSource
 | Model | Key Fields | Firestore Collection |
 |---|---|---|
 | `Job` | id, title, company, location, description, url, source, posted_date, relevance_score, status | `jobs` |
-| `UserProfile` | name, email, summary, skills, experiences, education, preferences, resume_path | `profiles` (singleton doc `"default"`) |
+| `ContactInfo` | email, linkedin, phone, github | (nested in `UserProfile`) |
+| `UserProfile` | name, contact_info, summary, skills, experiences, education, preferences, resume_path | `profiles` (singleton doc `"default"`) |
 | `Application` | id, job_id, tailored_resume_path, cover_letter, answers, status, submitted_at | `applications` |
 | `ApplicationStatusUpdate` | id, application_id, status, source, details, timestamp | `application_status_updates` |
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from applybot.dashboard.components import alert, page
-from applybot.models.profile import UserProfile, get_profile, save_profile
+from applybot.models.profile import ContactInfo, UserProfile, get_profile, save_profile
 from applybot.profile.enrichment import (
     enrich_profile_with_llm_async,
     extract_raw_resume_text,
@@ -52,6 +53,7 @@ _MIME_TYPES = {
 
 _FLASH_MESSAGES: dict[str, tuple[str, str]] = {
     "basic_saved": ("Basic profile info saved.", "success"),
+    "contact_saved": ("Contact information saved.", "success"),
     "resume_uploaded": ("Resume uploaded and parsed successfully.", "success"),
     "details_saved": ("Profile details saved.", "success"),
     "no_file": ("No file selected.", "error"),
@@ -64,7 +66,7 @@ _FLASH_MESSAGES: dict[str, tuple[str, str]] = {
 
 _PROFILE_FIELDS = [
     "name",
-    "email",
+    "contact_info",
     "summary",
     "skills",
     "experiences",
@@ -112,7 +114,10 @@ def _count_filled(profile: UserProfile) -> int:
     count = 0
     for fld in _PROFILE_FIELDS:
         val = getattr(profile, fld, None)
-        if isinstance(val, dict | list):
+        if isinstance(val, ContactInfo):
+            if any((val.email, val.linkedin, val.phone, val.github)):
+                count += 1
+        elif isinstance(val, dict | list):
             if val:
                 count += 1
         elif val:
@@ -128,6 +133,16 @@ def _map_resume_to_profile(parsed: ResumeData, profile: UserProfile) -> None:
         profile.name = resume_dict["name"]
     if not profile.summary and resume_dict.get("summary"):
         profile.summary = resume_dict["summary"]
+
+    # Best-effort: extract email from the raw contact_info string produced by the parser.
+    # The LLM enrichment step will do a more thorough extraction of all contact fields.
+    raw_contact = resume_dict.get("contact_info", "")
+    if raw_contact and not profile.contact_info.email:
+        email_match = re.search(
+            r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", raw_contact
+        )
+        if email_match:
+            profile.contact_info.email = email_match.group(0)
 
     for section in parsed.sections:
         heading_lower = section.heading.lower()
@@ -272,11 +287,40 @@ def register(rt: Any) -> None:  # noqa: C901
             H3("Basic Information"),
             Form(
                 Label("Name", Input(name="name", value=p.name)),
-                Label("Email", Input(name="email", type="email", value=p.email)),
                 Label("Summary", Textarea(p.summary, name="summary", rows="4")),
                 Button("Save Basic Info", type="submit"),
                 method="post",
                 action="/profile",
+            ),
+            cls="profile-section",
+        )
+
+        # ── Contact Information ─────────────────────────────────────
+        ci = p.contact_info
+        contact_section = Div(
+            H3("Contact Information"),
+            Form(
+                Label("Email", Input(name="email", type="email", value=ci.email)),
+                Label(
+                    "LinkedIn",
+                    Input(
+                        name="linkedin",
+                        value=ci.linkedin,
+                        placeholder="https://linkedin.com/in/yourname",
+                    ),
+                ),
+                Label("Phone", Input(name="phone", type="tel", value=ci.phone)),
+                Label(
+                    "GitHub",
+                    Input(
+                        name="github",
+                        value=ci.github,
+                        placeholder="https://github.com/yourname",
+                    ),
+                ),
+                Button("Save Contact Info", type="submit"),
+                method="post",
+                action="/profile/contact",
             ),
             cls="profile-section",
         )
@@ -394,7 +438,7 @@ def register(rt: Any) -> None:  # noqa: C901
         profile_dict = {
             "id": p.id,
             "name": p.name,
-            "email": p.email,
+            "contact_info": p.contact_info.model_dump(),
             "summary": p.summary,
             "skills": p.skills,
             "experiences": p.experiences,
@@ -419,6 +463,7 @@ def register(rt: Any) -> None:  # noqa: C901
             flash,
             completeness,
             basic_section,
+            contact_section,
             resume_section,
             skills_section,
             exp_section,
@@ -429,17 +474,33 @@ def register(rt: Any) -> None:  # noqa: C901
         )
 
     @rt("/profile", methods=["post"])
-    def post_basic(
-        name: str = "", email: str = "", summary: str = ""
-    ) -> RedirectResponse:
+    def post_basic(name: str = "", summary: str = "") -> RedirectResponse:
         profile = get_profile()
         if profile is None:
-            profile = UserProfile(name=name, email=email)
+            profile = UserProfile(name=name)
         profile.name = name
-        profile.email = email
         profile.summary = summary
         save_profile(profile)
         return RedirectResponse("/profile?msg=basic_saved", status_code=303)
+
+    @rt("/profile/contact", methods=["post"])
+    def post_contact(
+        email: str = "",
+        linkedin: str = "",
+        phone: str = "",
+        github: str = "",
+    ) -> RedirectResponse:
+        profile = get_profile()
+        if profile is None:
+            profile = UserProfile(name="")
+        profile.contact_info = ContactInfo(
+            email=email.strip(),
+            linkedin=linkedin.strip(),
+            phone=phone.strip(),
+            github=github.strip(),
+        )
+        save_profile(profile)
+        return RedirectResponse("/profile?msg=contact_saved", status_code=303)
 
     @rt("/profile/resume", methods=["get"])
     def get_resume() -> Response:

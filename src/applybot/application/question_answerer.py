@@ -172,7 +172,7 @@ def _build_profile_context(profile: UserProfile) -> str:
             edu_text += f"- {edu.get('degree', '')} from {edu.get('school', '')}\n"
 
     return f"""Name: {profile.name}
-Email: {profile.email}
+Email: {profile.contact_info.email}
 Summary: {profile.summary}
 
 Skills: {skills}
