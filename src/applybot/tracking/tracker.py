@@ -22,13 +22,8 @@ logger = logging.getLogger(__name__)
 
 # Valid state transitions
 VALID_TRANSITIONS: dict[ApplicationStatus, set[ApplicationStatus]] = {
-    ApplicationStatus.DRAFT: {
-        ApplicationStatus.READY_FOR_REVIEW,
-        ApplicationStatus.WITHDRAWN,
-    },
     ApplicationStatus.READY_FOR_REVIEW: {
         ApplicationStatus.APPROVED,
-        ApplicationStatus.DRAFT,  # back to draft for re-work
         ApplicationStatus.WITHDRAWN,
     },
     ApplicationStatus.APPROVED: {

@@ -131,7 +131,7 @@ class TestApplicationModel:
             job_id=job.id,
             cover_letter="Dear hiring manager...",
             answers={"q1": "a1", "q2": "a2"},
-            status=ApplicationStatus.DRAFT,
+            status=ApplicationStatus.READY_FOR_REVIEW,
         )
         app = add_application(app)
 
@@ -148,12 +148,12 @@ class TestApplicationModel:
         )
         job = add_job(job)
 
-        app = Application(job_id=job.id, status=ApplicationStatus.DRAFT)
+        app = Application(job_id=job.id, status=ApplicationStatus.READY_FOR_REVIEW)
         app = add_application(app)
 
         fetched = get_application(app.id)
         assert fetched is not None
-        assert fetched.status == ApplicationStatus.DRAFT
+        assert fetched.status == ApplicationStatus.READY_FOR_REVIEW
 
     def test_status_update_tracking(self):
         job = Job(
@@ -164,14 +164,14 @@ class TestApplicationModel:
         )
         job = add_job(job)
 
-        app = Application(job_id=job.id, status=ApplicationStatus.DRAFT)
+        app = Application(job_id=job.id, status=ApplicationStatus.READY_FOR_REVIEW)
         app = add_application(app)
 
         update = ApplicationStatusUpdate(
             application_id=app.id,
-            status=ApplicationStatus.READY_FOR_REVIEW,
+            status=ApplicationStatus.APPROVED,
             source=UpdateSource.SYSTEM,
-            details="Auto-prepared",
+            details="Auto-approved",
         )
         add_status_update(update)
 
