@@ -15,6 +15,7 @@ from fasthtml.common import (
     Input,
     Label,
     P,
+    Pre,
     Small,
     Span,
     Strong,
@@ -82,11 +83,18 @@ def _build_gap_section(gaps: list[dict[str, str]]) -> Div:
 # -- Cover-letter fragment ---------------------------------------------------
 
 
-def _cover_letter_section(app_id: str, cover_letter: str) -> Div:
-    """Cover-letter section — always editable, matching Q&A UX."""
-    return Div(
-        H4("Cover Letter"),
-        Form(
+def _cover_letter_section(
+    app_id: str, cover_letter: str, *, terminal: bool = False, saved: bool = False
+) -> Div:
+    """Cover-letter section — editable normally, read-only for terminal statuses."""
+    if terminal:
+        body: object = (
+            Pre(cover_letter, cls="cover-letter-pre")
+            if cover_letter
+            else P(Small("No cover letter."), style="margin:0")
+        )
+    else:
+        body = Form(
             Textarea(
                 cover_letter or "",
                 name="cover_letter",
@@ -104,45 +112,54 @@ def _cover_letter_section(app_id: str, cover_letter: str) -> Div:
                     cls="qa-save-btn secondary",
                 ),
             ),
-        ),
-        id=f"cover-letter-section-{app_id}",
-        cls="app-section",
-    )
+        )
+    children: list[object] = [H4("Cover Letter"), body]
+    if saved:
+        children.append(
+            P(
+                "Cover letter saved.",
+                style="font-size:0.8em;color:#4ade80;margin:0.25rem 0 0",
+            )
+        )
+    return Div(*children, id=f"cover-letter-section-{app_id}", cls="app-section")
 
 
 # -- Resume fragment ----------------------------------------------------------
 
 
-def _resume_section(app: Application) -> Div:
+def _resume_section(app: Application, *, terminal: bool = False) -> Div:
     """Tailored-resume section fragment."""
     app_id = app.id
-    retailor_btn = Button(
-        "Re-tailor Resume",
-        hx_post=f"/apps/{app_id}/retailor",
-        hx_target=f"#resume-section-{app_id}",
-        hx_swap="outerHTML",
-        hx_indicator=f"#retailor-ind-{app_id}",
-        cls="retailor-btn secondary",
-    )
-    indicator = Span(
-        "Working...",
-        id=f"retailor-ind-{app_id}",
-        cls="htmx-indicator",
-        style="font-size:0.8em;color:var(--text-2)",
-    )
+    if not terminal:
+        extra: list[object] = [
+            Button(
+                "Re-tailor Resume",
+                hx_post=f"/apps/{app_id}/retailor",
+                hx_target=f"#resume-section-{app_id}",
+                hx_swap="outerHTML",
+                hx_indicator=f"#retailor-ind-{app_id}",
+                cls="retailor-btn secondary",
+            ),
+            Span(
+                "Working...",
+                id=f"retailor-ind-{app_id}",
+                cls="htmx-indicator",
+                style="font-size:0.8em;color:var(--text-2)",
+            ),
+        ]
+    else:
+        extra = []
     if app.tailored_resume_path:
         filename = Path(app.tailored_resume_path).name
         body = Div(
             A(filename, href=f"/apps/{app_id}/resume/download", cls="resume-download"),
-            retailor_btn,
-            indicator,
+            *extra,
             cls="resume-section",
         )
     else:
         body = Div(
             P(Small("No tailored resume generated."), style="margin:0"),
-            retailor_btn,
-            indicator,
+            *extra,
             cls="resume-section",
         )
     return Div(
@@ -156,8 +173,10 @@ def _resume_section(app: Application) -> Div:
 # -- Q&A fragment -------------------------------------------------------------
 
 
-def _qa_section(app: Application) -> Div:
-    """Q&A answers section fragment (always in edit mode)."""
+def _qa_section(
+    app: Application, *, terminal: bool = False, saved: bool = False
+) -> Div:
+    """Q&A answers section fragment — editable normally, read-only for terminal statuses."""
     app_id = app.id
     if not app.answers:
         return Div(
@@ -166,20 +185,30 @@ def _qa_section(app: Application) -> Div:
             id=f"qa-section-{app_id}",
             cls="app-section",
         )
-    items = []
-    for i, (question, answer) in enumerate(app.answers.items()):
-        items.append(
-            Div(
-                Input(type="hidden", name=f"q_{i}", value=question),
-                Label(question, _for=f"a_{i}"),
-                Textarea(answer or "", name=f"a_{i}", id=f"a_{i}", rows="3"),
-                cls="qa-item",
-            )
+    if terminal:
+        body: object = Div(
+            *[
+                Div(
+                    Label(question),
+                    P(answer or "(no answer)", style="margin:0;font-size:0.9em;"),
+                    cls="qa-item",
+                )
+                for question, answer in app.answers.items()
+            ]
         )
-    return Div(
-        H4("Q&A Answers"),
-        Form(
-            *items,
+    else:
+        form_items = []
+        for i, (question, answer) in enumerate(app.answers.items()):
+            form_items.append(
+                Div(
+                    Input(type="hidden", name=f"q_{i}", value=question),
+                    Label(question, _for=f"a_{i}"),
+                    Textarea(answer or "", name=f"a_{i}", id=f"a_{i}", rows="3"),
+                    cls="qa-item",
+                )
+            )
+        body = Form(
+            *form_items,
             Div(
                 Button(
                     "Save Answers",
@@ -191,10 +220,16 @@ def _qa_section(app: Application) -> Div:
                     cls="qa-save-btn secondary",
                 ),
             ),
-        ),
-        id=f"qa-section-{app_id}",
-        cls="app-section",
-    )
+        )
+    children: list[object] = [H4("Q&A Answers"), body]
+    if saved:
+        children.append(
+            P(
+                "Answers saved.",
+                style="font-size:0.8em;color:#4ade80;margin:0.25rem 0 0",
+            )
+        )
+    return Div(*children, id=f"qa-section-{app_id}", cls="app-section")
 
 
 # -- Main card builder --------------------------------------------------------
@@ -263,11 +298,12 @@ def _build_app_card(application: Application, job: Job | None) -> object:
         else None
     )
 
+    is_terminal = application.status in _TERMINAL
     sections: list[object] = [
         details_section,
-        _resume_section(application),
-        _cover_letter_section(app_id, application.cover_letter),
-        _qa_section(application),
+        _resume_section(application, terminal=is_terminal),
+        _cover_letter_section(app_id, application.cover_letter, terminal=is_terminal),
+        _qa_section(application, terminal=is_terminal),
     ]
     if actions_sec is not None:
         sections.append(actions_sec)
@@ -333,13 +369,7 @@ def register(rt: Any) -> None:
         if app is None:
             return alert(f"Application {app_id} not found.", "error")
         update_application(app_id, cover_letter=cover_letter)
-        return Div(
-            _cover_letter_section(app_id, cover_letter),
-            P(
-                "Cover letter saved.",
-                style="font-size:0.8em;color:#4ade80;margin:0.25rem 0 0",
-            ),
-        )
+        return _cover_letter_section(app_id, cover_letter, saved=True)
 
     # -- Q&A answers save -----------------------------------------------------
 
@@ -359,13 +389,7 @@ def register(rt: Any) -> None:
             i += 1
         update_application(app_id, answers=answers)
         app.answers = answers
-        return Div(
-            _qa_section(app),
-            P(
-                "Answers saved.",
-                style="font-size:0.8em;color:#4ade80;margin:0.25rem 0 0",
-            ),
-        )
+        return _qa_section(app, saved=True)
 
     # -- Resume re-tailor -----------------------------------------------------
 
