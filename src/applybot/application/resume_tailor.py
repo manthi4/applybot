@@ -112,7 +112,7 @@ def _get_tailoring_plan(
     for section in resume_data.sections:
         resume_summary += f"\n## {section.heading}\n"
         for idx, item in enumerate(section.items):
-            resume_summary += f"  [{idx}] {item[:200]}\n"
+            resume_summary += f"  [{idx}] {item[:150]}\n"
 
     skills_text = str(profile.skills or {})
     experiences_text = str(profile.experiences or [])
@@ -147,7 +147,7 @@ Create a tailoring plan:
         TailoringPlan,
         system="You are an expert resume writer. You tailor resumes to specific jobs while maintaining complete honesty. You NEVER fabricate information.",
         tier="smart",
-        max_tokens=4096,
+        max_tokens=8192,
     )
 
 
