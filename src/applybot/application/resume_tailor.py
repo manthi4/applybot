@@ -45,7 +45,6 @@ TailoringPlan.model_rebuild()
 def tailor_resume(
     job: Job,
     profile: UserProfile,
-    base_resume_object: str | None = None,
 ) -> str:
     """Create a tailored resume for a specific job.
 
@@ -55,12 +54,11 @@ def tailor_resume(
     Args:
         job: The target job.
         profile: User profile with skills/experiences.
-        base_resume_object: GCS object name for the base resume.
 
     Returns:
         GCS object name for the generated tailored .docx resume.
     """
-    object_name = base_resume_object or profile.resume_path
+    object_name = profile.resume_path
     if not object_name or not file_exists(object_name):
         raise FileNotFoundError(f"Base resume not found: {object_name}")
 

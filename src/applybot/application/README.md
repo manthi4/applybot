@@ -29,7 +29,7 @@ results: list[tuple[Application, list[ProfileGap]]] = prepare_all_approved()
 ```python
 from applybot.application.resume_tailor import tailor_resume
 
-path: Path = tailor_resume(job, profile, base_resume_path, output_dir)
+path: str = tailor_resume(job, profile)
 # Output: data/tailored/resume_{job_id}_{company}.docx
 ```
 
