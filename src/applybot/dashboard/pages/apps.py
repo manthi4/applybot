@@ -24,6 +24,7 @@ from fasthtml.common import (
 from starlette.requests import Request
 from starlette.responses import Response
 
+from applybot.application.resume_tailor import tailor_resume
 from applybot.dashboard.components import (
     alert,
     confirmed_card,
@@ -41,6 +42,8 @@ from applybot.models.application import (
     update_application,
 )
 from applybot.models.job import Job, get_job
+from applybot.profile.manager import ProfileManager
+from applybot.storage import download_file
 from applybot.tracking.tracker import InvalidTransitionError, update_status
 
 _TERMINAL = {ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN}
@@ -108,7 +111,6 @@ def _cover_letter_section(
                     hx_post=f"/apps/{app_id}/cover-letter",
                     hx_target=f"#cover-letter-section-{app_id}",
                     hx_swap="outerHTML",
-                    hx_include="closest form",
                     cls="qa-save-btn secondary",
                 ),
             ),
@@ -216,7 +218,6 @@ def _qa_section(
                     hx_post=f"/apps/{app_id}/answers",
                     hx_target=f"#qa-section-{app_id}",
                     hx_swap="outerHTML",
-                    hx_include="closest form",
                     cls="qa-save-btn secondary",
                 ),
             ),
@@ -368,8 +369,12 @@ def register(rt: Any) -> None:
         app = get_application(app_id)
         if app is None:
             return alert(f"Application {app_id} not found.", "error")
-        update_application(app_id, cover_letter=cover_letter)
-        return _cover_letter_section(app_id, cover_letter, saved=True)
+        is_terminal = app.status in _TERMINAL
+        if not is_terminal:
+            update_application(app_id, cover_letter=cover_letter)
+        return _cover_letter_section(
+            app_id, cover_letter, terminal=is_terminal, saved=not is_terminal
+        )
 
     # -- Q&A answers save -----------------------------------------------------
 
@@ -387,9 +392,11 @@ def register(rt: Any) -> None:
             if question:
                 answers[question] = answer
             i += 1
-        update_application(app_id, answers=answers)
-        app.answers = answers
-        return _qa_section(app, saved=True)
+        is_terminal = app.status in _TERMINAL
+        if not is_terminal:
+            update_application(app_id, answers=answers)
+            app.answers = answers
+        return _qa_section(app, terminal=is_terminal, saved=not is_terminal)
 
     # -- Resume re-tailor -----------------------------------------------------
 
@@ -398,13 +405,12 @@ def register(rt: Any) -> None:
         app = get_application(app_id)
         if app is None:
             return alert(f"Application {app_id} not found.", "error")
+        if app.status in _TERMINAL:
+            return alert("Cannot re-tailor a terminal application.", "error")
         job = get_job(app.job_id)
         if job is None:
             return alert(f"Job {app.job_id} not found for this application.", "error")
         try:
-            from applybot.application.resume_tailor import tailor_resume
-            from applybot.profile.manager import ProfileManager
-
             profile = ProfileManager().get_profile()
             if profile is None:
                 return alert("No profile found -- cannot re-tailor resume.", "error")
@@ -423,14 +429,15 @@ def register(rt: Any) -> None:
         if app is None or not app.tailored_resume_path:
             return alert("Resume not found.", "error")
         try:
-            from applybot.storage import download_file
-
             content = download_file(app.tailored_resume_path)
             filename = Path(app.tailored_resume_path).name
+            safe_filename = filename.replace('"', "").replace(";", "").replace("\\", "")
             return Response(
                 content=content,
                 media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+                headers={
+                    "Content-Disposition": f'attachment; filename="{safe_filename}"'
+                },
             )
         except Exception as exc:
             return alert(f"Download failed: {exc}", "error")
