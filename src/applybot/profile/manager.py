@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from applybot.models.profile import (
+    ContactInfo,
     UserProfile,
     save_profile,
     update_profile_fields,
@@ -33,7 +34,7 @@ class ProfileManager:
         profile = _get_profile()
         if profile is not None:
             return profile
-        profile = UserProfile(name=name, email=email)
+        profile = UserProfile(name=name, contact_info=ContactInfo(email=email))
         return save_profile(profile)
 
     def update_profile(self, **kwargs: Any) -> UserProfile:
@@ -68,7 +69,7 @@ class ProfileManager:
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "name": profile.name,
-            "email": profile.email,
+            "contact_info": profile.contact_info.model_dump(),
             "summary": profile.summary,
             "skills": profile.skills,
             "experiences": profile.experiences,
@@ -84,6 +85,9 @@ class ProfileManager:
         """Import profile from a JSON file, creating or updating the DB record."""
         path = path or DATA_DIR / "profile.json"
         data = json.loads(path.read_text(encoding="utf-8"))
+        # Deserialize nested contact_info dict into a ContactInfo object.
+        if "contact_info" in data and isinstance(data["contact_info"], dict):
+            data["contact_info"] = ContactInfo(**data["contact_info"])
         profile = _get_profile()
         if profile is None:
             profile = UserProfile(**data)

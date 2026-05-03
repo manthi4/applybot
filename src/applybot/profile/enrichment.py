@@ -30,6 +30,12 @@ Rules:
 - If the profile already looks complete and the resume adds nothing new, return the profile unchanged.
 - Expand skills, experiences, and education from the resume if they are missing or incomplete in the profile.
 - Write a strong professional summary if the existing one is empty or weak.
+- Extract contact information from the resume and populate the contact_info fields:
+  - contact_info.email: email address
+  - contact_info.linkedin: LinkedIn profile URL or username
+  - contact_info.phone: phone number
+  - contact_info.github: GitHub profile URL or username
+  Only update a contact_info field if the resume clearly contains that information and the field is currently empty.
 """
 
 
@@ -80,6 +86,7 @@ def enrich_profile_with_llm(profile: UserProfile, resume_text: str) -> UserProfi
         UserProfile,
         system=_SYSTEM_PROMPT,
         tier="smart",
+        max_tokens=8192,
     )
 
     # Always preserve identity/path fields and guard against a missing name
@@ -88,6 +95,15 @@ def enrich_profile_with_llm(profile: UserProfile, resume_text: str) -> UserProfi
     updated.enrichment_warning = ""
     if not updated.name:
         updated.name = profile.name
+    # Preserve any contact fields the LLM left blank but the profile already had
+    if not updated.contact_info.email and profile.contact_info.email:
+        updated.contact_info.email = profile.contact_info.email
+    if not updated.contact_info.linkedin and profile.contact_info.linkedin:
+        updated.contact_info.linkedin = profile.contact_info.linkedin
+    if not updated.contact_info.phone and profile.contact_info.phone:
+        updated.contact_info.phone = profile.contact_info.phone
+    if not updated.contact_info.github and profile.contact_info.github:
+        updated.contact_info.github = profile.contact_info.github
 
     save_profile(updated)
     logger.info("LLM profile enrichment complete for profile %r", profile.id)

@@ -26,6 +26,7 @@ from applybot.models.job import (
     update_job,
 )
 from applybot.models.profile import (
+    ContactInfo,
     UserProfile,
     delete_profile,
     get_profile,
@@ -37,6 +38,7 @@ __all__ = [
     "Application",
     "ApplicationStatus",
     "ApplicationStatusUpdate",
+    "ContactInfo",
     "Job",
     "JobSource",
     "JobStatus",

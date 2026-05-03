@@ -98,5 +98,5 @@ def mock_profile() -> UserProfile:
         "locations": ["Remote", "San Francisco"],
         "min_salary": 120000,
     }
-    profile.email = "test@example.com"
+    profile.contact_info.email = "test@example.com"
     return profile
