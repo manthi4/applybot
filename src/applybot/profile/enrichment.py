@@ -86,6 +86,7 @@ def enrich_profile_with_llm(profile: UserProfile, resume_text: str) -> UserProfi
         UserProfile,
         system=_SYSTEM_PROMPT,
         tier="smart",
+        max_tokens=8192,
     )
 
     # Always preserve identity/path fields and guard against a missing name
