@@ -71,6 +71,7 @@ def tailor_resume(
         tmp_path = Path(tmp.name)
 
     out_path: Path | None = None
+    template_tmp: Path | None = None
     try:
         base_data = parse_resume(tmp_path)
 
@@ -84,8 +85,21 @@ def tailor_resume(
         output_name = f"resumes/tailored/resume_{job.id}_{_slugify(job.company)}.docx"
         with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as out_tmp:
             out_path = Path(out_tmp.name)
+        # The generate_resume() function requires a .docx template. If the
+        # original resume was not a .docx (e.g. PDF/MD), create a minimal
+        # temporary .docx template so generation can proceed.
+        if ext.lower() == ".docx":
+            template_for_generation = tmp_path
+        else:
+            from docx import Document as _DocxDocument
 
-        generate_resume(tailored_data, tmp_path, out_path)
+            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as ttmp:
+                template_tmp = Path(ttmp.name)
+            # Create a minimal .docx file to use as a template
+            _DocxDocument().save(str(template_tmp))
+            template_for_generation = template_tmp
+
+        generate_resume(tailored_data, template_for_generation, out_path)
 
         # Upload the result to storage
         upload_file(out_path.read_bytes(), output_name)
@@ -95,6 +109,8 @@ def tailor_resume(
         tmp_path.unlink(missing_ok=True)
         if out_path is not None:
             out_path.unlink(missing_ok=True)
+        if template_tmp is not None:
+            template_tmp.unlink(missing_ok=True)
 
 
 def _get_tailoring_plan(
