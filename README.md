@@ -1,12 +1,12 @@
 # ApplyBot
 
-A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications (resume + answers), and present them for human review before submission. GCP for hosting, Firestore for persistence, paid aggregator APIs for scraping, Vertex AI (Claude) for AI, and a FastHTML dashboard.
+A modular, cloud-hosted Python system that uses Claude agents to discover ML/robotics jobs daily, prepare tailored applications, and presents them for human review before submission.
 
 ---
 
 ## How It Works
 
-ApplyBot is organized as a pipeline with four main stages, a central dashboard, and a cloud scheduler:
+ApplyBot is organized as a pipeline with four main stages, a central dashboard:
 
 ```
 Profile ──→ Discovery ──→ Application Prep ──→ Tracking
@@ -16,12 +16,18 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
                        Cloud Scheduler
 ```
 
-1. **Profile** — Maintains a structured reference document of your skills, experiences, and interests. All other stages consult this. On first run, a bootstrap agent parses your existing resume, extracts a structured profile, identifies gaps, and runs an interactive CLI flow to fill them in.
-2. **Discovery** — Searches multiple job boards daily using LLM-generated queries, deduplicates results with fuzzy matching, and uses Claude to rank jobs by relevance to your profile (0-100 score with reasoning).
-3. **Application** — For each approved job, tailors your resume (rephrase/reorder only — never fabricate), drafts answers to common application questions, generates a cover letter, and flags any profile gaps that need human input. Creates an Application record for review.
-4. **Tracking** — Manages application lifecycle through a validated state machine (DRAFT → READY_FOR_REVIEW → APPROVED → SUBMITTED → RECEIVED → INTERVIEW/OFFER/REJECTED). Scans Gmail to auto-detect status updates from applied-to companies.
+1. **Profile** — Maintains a structured reference document of the user's skills, experiences, and interests. Essentially a stucured representatoin of their resume with any additional information they provide.
+    * **Implimentation details**: The profile is stored as a json object in <<>>. It can be created and modified in the profile page of the dashboard. The user has the option to submit a resume in the dashboard which will be parsed by an llm and formated into the profile representation.
+2. **Discovery** — Searches multiple job boards using LLM-generated queries, deduplicates results with fuzzy matching, and uses an llm to rank jobs by relevance to your profile (0-100 score with reasoning). Then saves them into the database.
+    * **Implimentation details**: The discovery functions are implemented as google cloud functions
+3. **Application** — For each approved job, tailors your resume, drafts answers to any present application questions, generates a cover letter, and flags any profile gaps that need human input. Creates an Application record for review.
+4. **Database** - EVERY OTHER COMPONENT OF THIS APP IS STATELESS. The chosen database maintains and tracks the current state of the entire app.
+    * **Profile** - Stored as a json object with a schema defined <<>>
+    * **Job Postings** - Stores all the job postings that have been posted with schema <<>>
+    * **Applications** - Stores all the applications that have been created as well as their current status <<>>
+        * Links each application with the UUID of the job posting it's for.
+        * Applications also have an associated "status" field. Either "review, approved, applied, rejected, or accepted"
 5. **Dashboard** — FastHTML UI for reviewing job queue, managing applications, editing profile, and viewing pipeline statistics. Protected by TOTP authentication.
-6. **Scheduler** — GCP Cloud Functions triggered by Cloud Scheduler for automated daily execution (discovery and Gmail tracking only; application preparation is triggered manually from the dashboard).
 
 **Human-in-the-loop**: The agent prepares everything, but never submits without explicit approval. Safety guardrail: the agent never submits without explicit approval.
 
@@ -32,7 +38,7 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 | Layer | Technology | Notes |
 |---|---|---|
 | Language | Python 3.12+ | black/ruff/mypy configured |
-| LLM | Claude via Google Vertex AI | Claude Sonnet 4.6 via `anthropic[vertex]` SDK; no LangChain |
+| LLM | Claude via Google Vertex AI | Claude Sonnet 4.6 via `anthropic[vertex]` SDK; |
 | Database | Google Cloud Firestore | Serverless NoSQL document database; schema-less, no migrations needed |
 | Frontend | FastHTML + PicoCSS + HTMX | Lightweight Python-native UI; no JS build step |
 | Job Scraping | SerpAPI, Greenhouse API, Lever API, lxml | Paid aggregator + free public APIs |
@@ -47,9 +53,7 @@ Profile ──→ Discovery ──→ Application Prep ──→ Tracking
 ```
 applybot/
 ├── README.md               # This file
-├── STATUS.md               # Current progress and next steps
 ├── DEPLOY.md               # Full deployment guide (manual + CI/CD)
-├── core_idea.md            # Original project vision
 ├── pyproject.toml          # Dependencies and tool config
 ├── data/                   # Local data (resume, exports)
 ├── .github/workflows/
@@ -76,40 +80,6 @@ Each component under `src/applybot/` has its own README describing its purpose, 
 
 ## Architecture
 
-### Data Flow
-
-```
-┌─────────────────────────────────────────────┐
-│         Dashboard (FastHTML)                  │
-│  TOTP-authenticated UI for jobs, apps,       │
-│  profile, and pipeline statistics            │
-└──────────────┬──────────────────────────────┘
-               │
-┌──────────────┴──────────────────────────────┐
-│           Tracking Layer                     │
-│  State machine + Gmail email classification  │
-│  + Notifications (email/Slack)               │
-└──────────────┬──────────────────────────────┘
-               │
-┌──────────────┴──────────────────────────────┐
-│       Application Preparation                │
-│  Resume Tailor → Q&A → Cover Letter          │
-│  (honesty guardrail: no fabrication)         │
-│  Human review before submission              │
-└──────────────┬──────────────────────────────┘
-               │
-┌──────────────┴──────────────────────────────┐
-│         Discovery Pipeline (async)           │
-│  Query Builder → Scrapers (parallel) →       │
-│  Deduplicator → Ranker → Save to DB         │
-└──────────────┬──────────────────────────────┘
-               │
-┌──────────────┴──────────────────────────────┐
-│    Shared Foundation                         │
-│  Models (Firestore) · LLM Client · Profile · Config│
-└─────────────────────────────────────────────┘
-```
-
 ### Cross-Cutting Dependencies
 
 - **LLM Client** — Used by: Query Builder, Ranker, Resume Tailor, Question Answerer, Gmail classifier, Cover Letter generator
@@ -118,65 +88,7 @@ Each component under `src/applybot/` has its own README describing its purpose, 
 
 ---
 
-## Data Models
-
-### Job
-
-| Field | Type | Notes |
-|---|---|---|
-| id | str | Firestore document ID |
-| title | str | Job title |
-| company | str | Company name |
-| location | str | Job location |
-| description | str | Full job description |
-| url | str | Application URL |
-| source | JobSource enum | SERPAPI, GREENHOUSE, LEVER, EU_REMOTE_JOBS, MANUAL |
-| posted_date | str | When the job was posted |
-| discovered_date | str | When we found it (ISO format) |
-| relevance_score | int | 0-100 score from ranker |
-| relevance_reasoning | str | Ranker's explanation |
-| status | JobStatus enum | NEW → REVIEWING → APPROVED → APPLIED / SKIPPED / REJECTED |
-
-### UserProfile
-
-| Field | Type | Notes |
-|---|---|---|
-| name | str | Full name |
-| email | str | Contact email |
-| summary | str | Professional summary |
-| skills | list | Structured skills data |
-| experiences | list | Work experience entries |
-| education | list | Education entries |
-| preferences | dict | Job preferences (roles, locations, salary, etc.) |
-| resume_path | str | Path to base .docx resume |
-
-Stored as a singleton document (`"default"`) in the `profiles` collection.
-
-### Application
-
-| Field | Type | Notes |
-|---|---|---|
-| id | str | Firestore document ID |
-| job_id | str | Which job this applies to |
-| tailored_resume_path | str | Path to generated .docx |
-| cover_letter | str | Generated cover letter |
-| answers | dict | question → answer pairs |
-| status | ApplicationStatus | DRAFT → READY_FOR_REVIEW → APPROVED → SUBMITTED → RECEIVED → INTERVIEW → OFFER / REJECTED / WITHDRAWN |
-| created_at | str | When the application was prepared (ISO format) |
-| submitted_at | str | When it was actually submitted (ISO format) |
-
-### ApplicationStatusUpdate
-
-| Field | Type | Notes |
-|---|---|---|
-| id | str | Firestore document ID |
-| application_id | str | References an Application |
-| status | ApplicationStatus | New status |
-| source | UpdateSource | MANUAL, GMAIL, SYSTEM |
-| details | str | Optional notes |
-| timestamp | str | When the change occurred (ISO format) |
-
----
+## [Data Models](src\applybot\models\README.md)
 
 ## Component Details
 
@@ -351,24 +263,32 @@ pytest
 
 ---
 
-## Cloud Deployment Plan
+## Deployment
 
-### GCP Cloud Functions
+ApplyBot is hosted on **Google Cloud Platform** in a single GCP project (ID configured at deploy time via Terraform). The default region is `us-central1`; Vertex AI LLM calls use `us-east5`.
 
-| Function | Trigger | Schedule | Purpose |
+### Compute Services
+
+| Service | GCP Product | What it runs | Entry point |
 |---|---|---|---|
-| `discovery_fn` | Cloud Scheduler | Daily at 8am | Run discovery orchestrator, send notification with summary |
-| `tracking_fn` | Cloud Scheduler | 2x daily | Scan Gmail for status updates |
+| **Dashboard** | Cloud Run | FastHTML web UI on port 8000 | Docker image from Artifact Registry |
+| **Discovery Pipeline** | Cloud Functions (Gen 2) | Daily job scraping + dedup + ranking | `handle_discovery` in `main.py` |
+| **Scheduler** | Cloud Scheduler | Cron triggers for discovery and tracking | — |
 
-> **Application preparation** is **not** scheduled. It is triggered manually via the **"Build Approved Applications"** button on the dashboard's Job Queue page (`POST /jobs/build-approved`). This gives the user full control over when LLM calls are made.
+The dashboard scales 0–1 (serverless, pay-per-use). The discovery function runs on a cron schedule; application preparation is **not** scheduled — it is triggered manually via the **"Build Approved Applications"** button on the dashboard.
 
-### Infrastructure
+### Supporting Infrastructure
 
-- **Database**: Google Cloud Firestore (FIRESTORE_NATIVE mode). Serverless, no provisioning or connection pools.
-- **Dashboard**: GCP Cloud Run (FastHTML), scales 0–1
-- **Secrets**: GCP Secret Manager for API keys
-- **Auth**: Service account with `roles/datastore.user` for Firestore access
-- **Scheduling**: Cloud Scheduler cron jobs (discovery and tracking only)
+All infra is defined as Terraform in `infra/`:
+
+| Resource | Purpose |
+|---|---|
+| **Firestore** | Serverless NoSQL database (jobs, applications, profile) |
+| **Artifact Registry** | Stores the dashboard's Docker images |
+| **Cloud Storage** | Resume files + discovery function source archive |
+| **Secret Manager** | SerpAPI key, dashboard TOTP secret |
+| **Vertex AI** | Claude and Gemini LLM inference |
+| **IAM Service Account** | `applybot-run` with roles for Firestore, Secret Manager, Vertex AI, and Storage |
 
 ### CI/CD (GitHub Actions)
 
