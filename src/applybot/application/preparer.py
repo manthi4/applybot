@@ -54,6 +54,7 @@ def prepare_application(
         logger.exception("Resume tailoring failed for job %s", job.id)
 
     # 2. Answer questions
+    # TODO: only do this if custom_questions were found for this job
     answers, gaps = answer_questions(job, profile, custom_questions)
     all_gaps.extend(gaps)
 
