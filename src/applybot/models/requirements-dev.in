@@ -1,0 +1,23 @@
+# Development / test dependencies for the `applybot.models` package.
+#
+# Includes the runtime requirements (-r requirements.in) plus the toolchain
+# needed to run the test suite under src/applybot/models/tests/.
+#
+# The model tests run against a local Firestore emulator (see
+# tests/firestore_emulator.md for how to start it). The conftest skips the
+# folder automatically when the emulator is not reachable, so these deps alone
+# are enough to collect the suite — but to actually execute the tests you also
+# need the emulator running on localhost:8080.
+
+-r requirements.in
+
+# Test runner. The suite uses asyncio_mode = "auto" (see root pyproject.toml),
+# so pytest-asyncio is pulled in even though these particular tests are sync.
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+
+# Lint / format / type-check toolchain enforced by pre-commit.
+ruff>=0.8.0
+black>=24.10.0
+mypy>=1.14.0
+pre-commit>=4.0.0

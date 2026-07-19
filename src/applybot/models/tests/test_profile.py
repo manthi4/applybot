@@ -12,6 +12,7 @@ from applybot.models.profile import (
     ContactInfo,
     UserProfile,
     _doc_to_profile,
+    _profile_to_doc,
     delete_profile,
     get_profile,
     save_profile,
@@ -96,7 +97,7 @@ class _StubDoc:
 class TestProfileSerialization:
     def test_round_trip(self):
         profile = _make_profile()
-        roundtripped = _doc_to_profile(_StubDoc(profile.model_dump()))
+        roundtripped = _doc_to_profile(_StubDoc(_profile_to_doc(profile)))
         assert roundtripped.name == profile.name
         assert roundtripped.contact_info.email == "test@example.com"
         assert roundtripped.skills["technical"] == ["Python", "PyTorch", "ROS"]
