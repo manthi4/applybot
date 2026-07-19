@@ -55,7 +55,7 @@ This creates:
 - Artifact Registry repository
 - Secret Manager secrets (API keys)
 - Cloud Run service (scales 0–1)
-- Cloud Functions + Cloud Scheduler for daily discovery
+- Cloud Functions
 - IAM bindings (Cloud Run → Firestore, Secrets)
 
 Note the outputs — you'll need the `artifact_registry` URL:

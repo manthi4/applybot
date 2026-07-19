@@ -1,26 +1,6 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
-
-```
-applybot/
-├── src/applybot/           # Application source
-│   ├── models/             # Pydantic models + Firestore CRUD (Job, Application, UserProfile)
-│   ├── llm/                # Claude/Gemini via Vertex AI SDK wrapper
-│   ├── profile/            # Profile CRUD + resume (.docx / PDF) parsing & generation
-│   ├── discovery/          # Multi-source job scraping → dedup → ranking pipeline
-│   │   ├── scrapers/       # Pluggable scrapers: SerpAPI, Greenhouse, Lever, EuRemoteJobs
-│   │   └── tests/          # Module-level unit tests
-│   ├── application/        # Resume tailoring, Q&A drafts, cover letter generation
-│   ├── tracking/           # State machine + Gmail email classification
-│   └── dashboard/          # FastHTML UI (TOTP-authenticated, PicoCSS + HTMX)
-├── tests/                  # Top-level integration tests
-├── infra/                  # Terraform IaC (Cloud Run, Firestore, GCS bucket)
-├── main.py                 # Cloud Function entry point for discovery pipeline
-└── pyproject.toml          # Dependencies, tool config, CLI entry point
-```
-
-Each sub-package under `src/applybot/` has its own README describing its API and boundaries.
+## Module Organization
 
 ## Build, Test, and Development Commands
 
