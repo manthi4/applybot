@@ -32,6 +32,7 @@ This section is meant to give an outline of each component in the applybot syste
 
 ```
 applybot/
+├── requirements.txt        #
 ├── AGENTS.md               #
 ├── README.md               # This file
 ├── DEPLOY.md               # Full deployment guide (manual + CI/CD)
@@ -49,9 +50,10 @@ applybot/
 │   ├── models/             # Pydantic models + Firestore CRUD (Job, Application, UserProfile)
 │   ├── config.py           # Pydantic Settings (env-based)
 └── tests/                  # pytest suite
+
 ```
 
-Each component has its own README describing its purpose, API, and boundaries.
+Each component has its own README describing its purpose, API, and boundaries. It also has its own requirements.in and requirements-dev.in which get compiled into the top level requirements.txt
 
 ---
 
