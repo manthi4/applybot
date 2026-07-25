@@ -57,20 +57,19 @@ Each component has its own README describing its purpose, API, and boundaries.
 
 ## Testing
 
-the top level tests/ repo is intended for integration tests involving multiple components. More specific component level testing is handled inside more specific component level testing folders. It is important to keep tests updated when changing any functionality.
+The top level tests/ repo is intended for integration tests involving multiple components. More specific component level testing is handled inside more specific component level testing folders. It is important to keep tests updated when changing any functionality.
 
-## Architecture
 
-### Cross-Cutting Dependencies
+## Cross-Cutting Dependencies
 
 - **LLM Engine** — Used by: Discovery Function, Application Preperation Function, Dashboard
 - **Models** — Shared Firestore data layer accessed by all components
 
 ---
 
-## [Data Models](src\applybot\models\README.md)
+## [Data Models](src/applybot/models/README.md)
 
-### CI/CD (GitHub Actions)
+## CI/CD (GitHub Actions)
 
 Two workflows in `.github/workflows/` automate infrastructure and image deployment:
 
@@ -102,94 +101,6 @@ git commit -m "fix bug --docker"
 
 See [DEPLOY.md](DEPLOY.md) § "CI/CD with GitHub Actions" for full setup instructions (GCS bucket for Terraform state, CI service account creation, secrets configuration).
 
-
-## Component Details
-
-### LLM Client (`llm/`)
-
-Thin wrapper around the Anthropic Vertex AI SDK providing three call patterns:
-
-- **`complete(prompt, system, model, temperature)`** → `str` — Simple text completion
-- **`structured_output(prompt, output_type, system, model)`** → `T` — Returns a Pydantic model; auto-strips markdown code fences from JSON
-- **`with_tools(prompt, tools, system, model)`** → `Message` — Tool-use call returning the full Anthropic Message for inspection
-
-Configurable model selection (sonnet for fast/cheap tasks, opus for complex reasoning). Module-level singleton `llm = LLMClient()`.
-
-
-### Discovery (`discovery/`)
-
-**Pipeline**: Query Builder → Scrapers (parallel, async) → Deduplicator → Ranker → Save to DB
-
-**Query Builder** — Uses Claude + user profile to generate 6 varied search queries (e.g., "machine learning engineer robotics", "ML infrastructure", "applied ML robotics"). Falls back to sensible defaults if no profile exists.
-
-**Scrapers** — Pluggable via `BaseScraper` ABC. Each returns `list[RawJob]`:
-
-| Scraper | Source | API/Method | Coverage |
-|---|---|---|---|
-| SerpAPIScraper | Google Jobs | SerpAPI paid API | LinkedIn, Indeed, Glassdoor aggregated |
-| GreenhouseScraper | Greenhouse | Public boards API (`boards-api.greenhouse.io`) | Companies using Greenhouse ATS |
-| LeverScraper | Lever | Public postings API (`api.lever.co`) | Companies using Lever ATS |
-| EuRemoteJobsScraper | EuRemoteJobs | HTML scraping with lxml | EU remote positions |
-| *(Workday)* | *(deferred)* | *Complex, per-company tenants* | *Deferred to future phase* |
-
-All scrapers run concurrently via `asyncio.gather()`. One scraper failing doesn't block others.
-
-**Deduplicator** — Fuzzy matching on (title + company + location) using rapidfuzz `token_sort_ratio` with threshold of 85. Normalizes URLs by stripping tracking parameters. Merges duplicates, keeps earliest discovered_date.
-
-**Ranker** — Claude evaluates each job against the user profile in batches of 5. Returns `(job, score: 0-100, reasoning: str)`. Filters out jobs below configurable threshold (default: 50).
-
-**Orchestrator** — `run_discovery()` ties it all together and returns `DiscoveryResult` with counts: total_scraped, after_dedup, above_threshold, new_jobs_saved, top_matches.
-
-### Application (`application/`)
-
-**Resume Tailor** — Input: job description + user profile + base resume. Claude analyzes job requirements, generates a `TailoringPlan` (summary rewrite + per-section edits), then applies it to produce a tailored .docx.
-
-**Strict guardrail**: The agent can only reorder/rephrase existing experiences from the profile. It must NOT fabricate skills, experiences, or qualifications.
-
-**Question Answerer** — Drafts answers to common application questions:
-- "Why are you interested in this role?"
-- "Why do you want to work at {company}?"
-- "Describe your most relevant experience for this role."
-- "What is your greatest strength related to this position?"
-
-Custom questions can be added per job. If the profile lacks required info, returns `ProfileGap` objects (question + context) for human input.
-
-**Cover Letter Generator** — Claude writes a 3-4 paragraph letter using only real profile data.
-
-**Preparer** — Orchestrates the full flow: tailor resume → answer questions → generate cover letter → create Application record (status=READY_FOR_REVIEW). Also has `prepare_all_approved()` to batch-process all approved jobs.
-
-**Human Review** — Dashboard shows job details side-by-side with tailored resume (downloadable .docx) and draft answers. User can approve, edit, reject, or request re-generation.
-
-### Tracking (`tracking/`)
-
-**State Machine** — Enforced valid transitions:
-
-```
-DRAFT → READY_FOR_REVIEW, WITHDRAWN
-READY_FOR_REVIEW → APPROVED, DRAFT, WITHDRAWN
-APPROVED → SUBMITTED, WITHDRAWN
-SUBMITTED → RECEIVED, REJECTED, WITHDRAWN
-RECEIVED → INTERVIEW, REJECTED, WITHDRAWN
-INTERVIEW → OFFER, REJECTED, WITHDRAWN
-OFFER → WITHDRAWN
-REJECTED → (terminal)
-WITHDRAWN → (terminal)
-```
-
-Every transition creates an `ApplicationStatusUpdate` audit record with source (MANUAL/GMAIL/SYSTEM) and timestamp.
-
-
-### Dashboard (`dashboard/`)
-
-**FastHTML Frontend** — Pages:
-- **Overview** (`/`) — Stats cards, pipeline progress bars, application status breakdown
-- **Job Queue** (`/jobs`) — Filterable job list with HTMX-powered approve/skip actions
-- **Applications** (`/apps`) — Applications by status with cover letter, answers, review actions
-- **Profile** (`/profile`) — Name/email/summary form + full profile JSON display
-
-**Authentication** — All routes except `/healthz` are protected by TOTP. Set `DASHBOARD_TOTP_SECRET` (Base32 secret) to enable. Run `applybot setup-auth` to generate a secret and scan the QR code with any authenticator app. Sessions last 24 hours (signed cookie).
-
----
 
 ## Configuration
 
