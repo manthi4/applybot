@@ -1,14 +1,18 @@
 # Models
 
 Pydantic data models and Firestore CRUD functions. This is the foundational data layer — all other components depend on these models.
+- **No business logic** — models define data shapes and CRUD only
+- **No direct imports from other applybot modules** — this is a leaf dependency
+- Database connection configured via `settings.gcp_project_id` (falls back to Application Default Credentials)
 
-## Files
-
-- **base.py** — Firestore client singleton (`get_db()`, `init_db()`)
-- **job.py** — `Job` model and CRUD functions for job listings
-- **profile.py** — `UserProfile` model with singleton document pattern
-- **application.py** — `Application`, `ApplicationStatusUpdate` models and CRUD functions
-
+## File Structure
+```
+models/
+├── application.py      # `Application`, `ApplicationStatusUpdate` models and CRUD functions
+├── base.py             # Firestore client singleton (`get_db()`, `init_db()`)
+├── job.py              # `Job` model and CRUD functions for job listings
+├── profile.py          # `UserProfile` model with singleton document pattern
+```
 ## Public API
 
 ### Database Setup
@@ -33,6 +37,8 @@ from applybot.models.application import ApplicationStatus, UpdateSource
 ```
 
 ### Pydantic Models
+- All IDs are `str` (Firestore document IDs)
+
 
 | Model | Key Fields | Firestore Collection |
 |---|---|---|
@@ -69,9 +75,15 @@ from applybot.models.application import ApplicationStatus, UpdateSource
 - `update_profile_fields(**fields) -> None`
 - `delete_profile() -> None`
 
-## Boundaries
 
-- **No business logic** — models define data shapes and CRUD only
-- **No direct imports from other applybot modules** — this is a leaf dependency
-- All IDs are `str` (Firestore document IDs)
-- Database connection configured via `settings.gcp_project_id` (falls back to Application Default Credentials)
+### Profile (`profile/`)
+
+**ProfileManager** — CRUD operations for the UserProfile table:
+- `get_profile()`, `get_or_create_profile(name, email)`, `update_profile(**kwargs)`
+- `get_skills()`, `export_profile_json(path)`, `import_profile_json(path)`
+
+**Resume** — .docx parsing and generation:
+- `parse_resume(path)` → `ResumeData` (name, contact_info, sections with title + content)
+- `generate_resume(data, template_path, output_path)` → creates tailored .docx preserving template formatting
+
+**Bootstrap flow** (planned): On first run, parse existing resume → extract structured profile → store in DB → agent identifies gaps → interactive CLI to fill them in.

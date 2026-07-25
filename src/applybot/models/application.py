@@ -28,7 +28,6 @@ class ApplicationStatus(str, enum.Enum):
 
 class UpdateSource(str, enum.Enum):
     MANUAL = "manual"
-    GMAIL = "gmail"
     SYSTEM = "system"
 
 
