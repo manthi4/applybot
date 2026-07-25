@@ -180,7 +180,7 @@ ApplyBot is hosted on **Google Cloud Platform** in a single GCP project (ID conf
 | Service | GCP Product | What it runs | Entry point |
 |---|---|---|---|
 | **Dashboard** | Cloud Run | FastHTML web UI on port 8000 | Docker image from Artifact Registry |
-| **Discovery Pipeline** | Cloud Functions (Gen 2) | Daily job scraping + dedup + ranking | `handle_discovery` in `main.py` |
+| **Discovery Pipeline** | Cloud Functions (Gen 2) | Daily job scraping + dedup + ranking | `handle_discovery` in `src/applybot/discovery/main.py` |
 
 The dashboard scales 0–1 (serverless, pay-per-use). The discovery function and application preparation are triggered manually via the **"Build Approved Applications"** button on the dashboard.
 

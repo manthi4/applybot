@@ -1,4 +1,9 @@
-"""Google Cloud Function entry point for the discovery pipeline."""
+"""Cloud Functions Gen 2 entry point for the discovery pipeline.
+
+Deployed as the `applybot-discovery` function (see `infra/cloud_functions.tf`);
+the dotted entry point `applybot.discovery.main.handle_discovery` is resolved
+by functions-framework against the repo-root source archive.
+"""
 
 from __future__ import annotations
 

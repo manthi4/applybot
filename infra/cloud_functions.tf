@@ -17,6 +17,7 @@ data "archive_file" "discovery_source" {
     ".venv",
     ".git",
     "data",
+    "dashboard",
     "infra",
     "tests",
     "alembic",
@@ -43,7 +44,7 @@ resource "google_cloudfunctions2_function" "discovery" {
 
   build_config {
     runtime     = "python312"
-    entry_point = "handle_discovery"
+    entry_point = "applybot.discovery.main.handle_discovery"
 
     source {
       storage_source {

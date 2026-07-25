@@ -32,9 +32,6 @@ dev = [
     "pre-commit>=4.0.0",
 ]
 
-[project.scripts]
-applybot = "applybot.cli:cli"
-
 [build-system]
 requires = ["setuptools>=75.0"]
 build-backend = "setuptools.build_meta"
@@ -54,6 +51,19 @@ disable_error_code = ["misc"]
 module = ["tests.*", "applybot.discovery.tests.*", "applybot.models.tests.*"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+
+# Cloud Functions entry point lives in-package for deployment, but its runtime
+# deps (functions-framework, flask) are only present in the Cloud Function
+# environment via requirements.txt — not installed in the dev env. Mirror the
+# pre-move behavior where main.py at the repo root was outside mypy's src/ scope.
+[[tool.mypy.overrides]]
+module = [
+  "applybot.discovery.main",
+  "functions_framework",
+  "flask",
+]
+ignore_missing_imports = true
+disable_error_code = ["untyped-decorator"]
 
 [tool.ruff]
 target-version = "py312"
