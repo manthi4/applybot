@@ -45,7 +45,7 @@ class Application(BaseModel):
     submitted_at: datetime | None = None
 
     def __repr__(self) -> str:
-        return f"<Application {self.id}: job={self.job_id} status={self.status}>"
+        return f"<Application {self.id}: job={self.job_id} status={self.status.value}>"
 
 
 class ApplicationStatusUpdate(BaseModel):
@@ -59,7 +59,7 @@ class ApplicationStatusUpdate(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def __repr__(self) -> str:
-        return f"<StatusUpdate {self.id}: {self.status} via {self.source}>"
+        return f"<StatusUpdate {self.id}: {self.status.value} via {self.source.value}>"
 
 
 def _app_to_doc(app: Application) -> dict[str, Any]:

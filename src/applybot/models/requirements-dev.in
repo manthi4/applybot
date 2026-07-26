@@ -1,0 +1,11 @@
+# Dev/test deps for the `applybot.models` package.
+# Test runner. Suite uses asyncio_mode = "auto" (root pyproject.toml),
+# so pytest-asyncio is needed even though these tests are sync.
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+
+# Lint / format / type-check toolchain enforced by pre-commit.
+ruff>=0.8.0
+black>=24.10.0
+mypy>=1.14.0
+pre-commit>=4.0.0

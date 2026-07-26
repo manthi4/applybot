@@ -1,0 +1,16 @@
+# Runtime dependencies for the `applybot.models` package.
+#
+# These are the third-party packages actually imported by the modules in this
+# folder (job.py, application.py, profile.py, base.py). They are mirrored here
+# for per-module dependency tracking; the canonical, project-wide list lives in
+# the root pyproject.toml. Keep these versions in sync with pyproject.toml.
+
+# Pydantic data models (Job, Application, UserProfile, ContactInfo).
+pydantic>=2.10.0
+
+# Settings loader used by applybot.config, which base.py imports to read
+# settings.gcp_project_id.
+pydantic-settings>=2.7.0
+
+# Firestore client used by base.py (get_db / init_db) and the CRUD functions.
+google-cloud-firestore>=2.19.0

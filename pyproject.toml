@@ -51,7 +51,7 @@ plugins = ["pydantic.mypy"]
 disable_error_code = ["misc"]
 
 [[tool.mypy.overrides]]
-module = ["tests.*", "applybot.discovery.tests.*"]
+module = ["tests.*", "applybot.discovery.tests.*", "applybot.models.tests.*"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 
