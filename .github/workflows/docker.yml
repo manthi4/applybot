@@ -43,7 +43,7 @@ jobs:
           echo "REGISTRY=${REGISTRY}" >> "$GITHUB_ENV"
 
       - name: Build Docker image
-        run: docker build -t applybot .
+        run: docker build -t applybot -f dashboard/Dockerfile .
 
       - name: Tag and push
         run: |

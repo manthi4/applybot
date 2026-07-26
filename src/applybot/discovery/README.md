@@ -119,7 +119,7 @@ ranked: list[tuple[RawJob, int, str]] = rank_jobs(jobs, profile)
 
 Discovery runs as a **Cloud Functions Gen 2** HTTP function. It must be triggered manually — either via the CLI locally, or by sending an HTTP POST to the function URL in GCP.
 
-- **Entry point**: `handle_discovery` in `main.py` (project root)
+- **Entry point**: `handle_discovery` in `src/applybot/discovery/main.py`
 - **Runtime**: Python 3.12, 512Mi memory, 300s timeout
 - **Terraform**: `infra/cloud_functions.tf`
 
