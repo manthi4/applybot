@@ -111,6 +111,7 @@ class TestApplicationSerialization:
         app = _make_app(status=ApplicationStatus.OFFER)
         doc = _app_to_doc(app)
         assert doc["status"] == ApplicationStatus.OFFER.value
+        assert type(doc["status"]) is str
         assert "id" not in doc
 
     def test_round_trip(self):

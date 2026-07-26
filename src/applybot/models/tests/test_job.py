@@ -201,8 +201,36 @@ class TestJobBatch:
         add_jobs(jobs)
         assert all(j.id != "" for j in jobs)
 
-    def test_add_jobs_over_400_exercises_multi_commit(self):
-        """The Firestore batch limit is 500; >400 jobs forces a commit mid-batch."""
+    def test_add_jobs_over_400_exercises_multi_commit(self, monkeypatch):
+        """add_jobs must flush mid-batch at the 400-write threshold.
+
+        The Firestore hard limit is 500 writes per batch; add_jobs commits
+        every 400 writes to stay safely under it. With n=420 a correct
+        implementation commits twice (once at 400, once for the remainder),
+        while one that drops the mid-batch commit would commit only once and
+        would silently rely on the emulator tolerating >500-write batches.
+        We spy on the batch commit call count to defend the multi-commit path.
+        """
+        from applybot.models.base import get_db
+
+        client = get_db()
+        real_batch = type(client).batch
+        commit_calls = 0
+
+        def tracking_batch(self):
+            batch = real_batch(self)
+            real_commit = batch.commit
+
+            def commit(*args, **kwargs):
+                nonlocal commit_calls
+                commit_calls += 1
+                return real_commit(*args, **kwargs)
+
+            batch.commit = commit  # type: ignore[method-assign]
+            return batch
+
+        monkeypatch.setattr(type(client), "batch", tracking_batch)
+
         n = 420
         jobs = [_make_job(url=f"https://example.com/mc{i}") for i in range(n)]
         count = add_jobs(jobs)
@@ -210,6 +238,9 @@ class TestJobBatch:
         # Confirm they were all actually written by counting URLs.
         urls = get_all_job_urls()
         assert len(urls) == n
+        # The 400-th write forces a mid-batch commit, and the remainder is
+        # flushed at the end — so a correct implementation commits >= 2 times.
+        assert commit_calls >= 2, f"expected multi-commit, got {commit_calls}"
 
     def test_add_jobs_empty(self):
         assert add_jobs([]) == 0

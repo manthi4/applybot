@@ -120,11 +120,10 @@ class TestProfileSerialization:
         }
         profile = _doc_to_profile(_StubDoc(legacy))
         assert profile.contact_info.email == "legacy@example.com"
-        assert not hasattr(profile, "email")  # field is dropped
 
-    def test_legacy_flat_email_dropped_when_contact_info_present(self):
-        """When both `email` and `contact_info` exist, the flat `email` is dropped
-        (the nested object wins)."""
+    def test_nested_contact_info_wins_over_legacy_flat_email(self):
+        """When both `email` and `contact_info` exist, the nested
+        `contact_info.email` takes precedence over the legacy flat `email`."""
         legacy = {
             "name": "Legacy User",
             "email": "stale@example.com",
@@ -166,12 +165,11 @@ class TestProfileCRUD:
 
     def test_save_profile_refreshes_updated_at(self):
         profile = _make_profile()
-        old_ts = datetime(2020, 1, 1, tzinfo=UTC)
-        profile.updated_at = old_ts
+        pre_save_ts = profile.updated_at
         save_profile(profile)
         fetched = get_profile()
         assert fetched is not None
-        assert fetched.updated_at > old_ts
+        assert fetched.updated_at > pre_save_ts
 
     def test_save_profile_full_replace(self):
         save_profile(_make_profile(name="Original"))

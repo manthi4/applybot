@@ -11,7 +11,10 @@ suite stays green on machines without the emulator.
 
 from __future__ import annotations
 
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 # Route the Firestore client at the emulator *before* any applybot code or the
 # firestore client is imported.  Setting these here means the lazy singleton in
@@ -36,7 +39,9 @@ def _emulator_reachable() -> bool:
     import urllib.request
 
     try:
-        # A GET on the documents endpoint returns 200 when the emulator is up.
+        # A GET on the emulator root returns 200 when the emulator is up. The
+        # documents endpoint (CLEAR_URL) returns 404 on an empty database, so it
+        # is NOT a usable health check — only the root is.
         urllib.request.urlopen(f"http://{EMULATOR_HOST}/", timeout=1).read()
     except (urllib.error.URLError, OSError, TimeoutError):
         return False
@@ -82,21 +87,37 @@ def db_client(emulator_available) -> firestore.Client:
     return firestore.Client(project=PROJECT_ID)
 
 
-@pytest.fixture(autouse=True)
-def clear_emulator(emulator_available) -> None:
-    """Wipe every collection in the emulator after each test.
+def _wipe_emulator() -> None:
+    """Best-effort DELETE of all documents in the emulator.
 
-    Guarantees every test starts from an empty database.  Uses the emulator's
-    admin REST API (a single DELETE on the documents root clears all data).
+    A single DELETE on the documents root clears every collection.  Failures
+    are logged but never raised, so a wipe problem surfaces as diagnosable
+    cross-test contamination rather than aborting the run.
     """
     import urllib.request
 
-    yield
     try:
         urllib.request.urlopen(
             urllib.request.Request(CLEAR_URL, method="DELETE"), timeout=5
         ).read()
-    except Exception:
-        # Best-effort; a failed wipe will surface as cross-test contamination
-        # and is preferable to failing the whole run.
-        pass
+    except Exception as exc:
+        logger.warning(
+            "Failed to wipe Firestore emulator at %s: %s: %s",
+            CLEAR_URL,
+            type(exc).__name__,
+            exc,
+        )
+
+
+@pytest.fixture(autouse=True)
+def clear_emulator(emulator_available) -> None:
+    """Wipe every collection in the emulator before and after each test.
+
+    Wiping before the test guarantees a clean start even when a single test
+    is run in isolation against an emulator carrying leftover data.  Wiping
+    after keeps the run tidy for the next test.  Both wipes are best-effort;
+    failures are logged (see ``_wipe_emulator``) but never fail the run.
+    """
+    _wipe_emulator()
+    yield
+    _wipe_emulator()
