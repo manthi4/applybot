@@ -202,10 +202,23 @@ _mock_firestore_v1.base_query = _mock_base_query
 
 # Inject the mocks into sys.modules so "from google.cloud.firestore_v1 import Client"
 # and "from google.cloud.firestore_v1.base_query import FieldFilter" both resolve.
-sys.modules.setdefault("google", MagicMock())
-sys.modules.setdefault("google.cloud", MagicMock())
-sys.modules.setdefault("google.cloud.firestore_v1", _mock_firestore_v1)
-sys.modules.setdefault("google.cloud.firestore_v1.base_query", _mock_base_query)
+#
+# ONLY install these in-memory shims when the real google-cloud-firestore package
+# cannot be imported. When the real package IS present we must NOT shadow it, or
+# other conftests that need the real client (e.g. the Firestore-emulator-backed
+# model tests) silently bind to this mock instead, producing false-green skips or
+# leaked state. The root mock-tests below get their mock from the autouse
+# `mock_firestore` fixture (which patch()es the client directly), not from here.
+try:
+    import google.cloud.firestore_v1  # noqa: F401
+
+    _HAS_REAL_FIRESTORE = True
+except ImportError:
+    _HAS_REAL_FIRESTORE = False
+    sys.modules.setdefault("google", MagicMock())
+    sys.modules.setdefault("google.cloud", MagicMock())
+    sys.modules.setdefault("google.cloud.firestore_v1", _mock_firestore_v1)
+    sys.modules.setdefault("google.cloud.firestore_v1.base_query", _mock_base_query)
 
 
 # ---------------------------------------------------------------------------
