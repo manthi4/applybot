@@ -53,7 +53,7 @@ The test suite relies on pytest fixtures located in `tests/conftest.py` to enfor
 When configuring or updating `conftest.py`, ensure the following elements are present:
 
 - **Environment Override:** `FIRESTORE_EMULATOR_HOST` must be set before the Firestore client is initialized.
-- **Dependency Injection:** The `get_db()` function must be patched exactly where it is used (`applybot.models.applications`), not where it is defined (`applybot.models.base`).
+- **Dependency Injection:** The `get_db()` function must be patched at its single definition site (`applybot.models.base.get_db`) — all model access (via `FirestoreModel` classmethods and `UserProfile` classmethods) routes through it. Call `get_db.cache_clear()` so no previously-cached real client leaks in.
 - **State Teardown:** The emulator must be wiped clean after every test using its REST API.
 
 ```python
@@ -78,8 +78,11 @@ def db_client():
 @pytest.fixture(autouse=True)
 def mock_get_db(db_client):
     """Hooks into the application's DB getter to use the test client."""
-    # NOTE: We patch where get_db is imported/used, not where it is defined.
-    with patch("applybot.models.applications.get_db", return_value=db_client):
+    # NOTE: get_db is lru_cached; clear the cache and patch the single definition
+    # site so every FirestoreModel / UserProfile classmethod sees the test client.
+    from applybot.models import base
+    base.get_db.cache_clear()
+    with patch("applybot.models.base.get_db", return_value=db_client):
         yield db_client
 
 
@@ -97,21 +100,21 @@ def clear_emulator():
 When writing or modifying tests, adhere to the following rules:
 
 - **Assume an Empty Database:** Because of the `clear_emulator` fixture, every test starts with 0 documents. You must seed any necessary state in the _Given_ phase of your test.
-- **Test Serialization Boundaries:** Pydantic models (like `Application`) and Firestore documents are distinct. Always verify that `Enum`s and `Datetime`s correctly convert to strings/timestamps when passing through `_app_to_doc` and `_doc_to_app`.
-- **Bypass Pydantic for Legacy Data Tests:** If testing migration logic (e.g., handling deprecated statuses like `"draft"`), inject raw dictionaries directly into Firestore using the `db_client` fixture, rather than using the application's `add_application` function.
+- **Test Serialization Boundaries:** Pydantic models (like `Application`) and Firestore documents are distinct. Always verify that `Enum`s and `Datetime`s correctly convert to strings/timestamps when passing through `Application.to_doc()` and `Application.from_doc()`.
+- **Bypass Pydantic for Legacy Data Tests:** If testing migration logic (e.g., handling deprecated statuses like `"draft"`), inject raw dictionaries directly into Firestore using the `db_client` fixture, rather than using the model's `save()` classmethod.
 
 ### Example Test Structure
 
 ```python
 def test_create_and_fetch_application(db_client):
     # 1. Given (Seed data)
-    from applybot.models.applications import Application, add_application, get_application
+    from applybot.models.application import Application
     app = Application(job_id="job_abc")
 
     # 2. When (Action)
-    saved_app = add_application(app)
+    saved_app = app.save()
 
     # 3. Then (Assertion)
-    fetched_app = get_application(saved_app.id)
+    fetched_app = Application.get(saved_app.id)
     assert fetched_app.job_id == "job_abc"
 ```

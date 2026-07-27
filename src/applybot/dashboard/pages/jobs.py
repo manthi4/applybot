@@ -28,7 +28,7 @@ from applybot.dashboard.components import (
     page,
     status_badge,
 )
-from applybot.models.job import Job, JobStatus, get_job, query_jobs, update_job
+from applybot.models.job import Job, JobStatus
 
 logger = logging.getLogger(__name__)
 
@@ -240,7 +240,7 @@ def _build_jobs_list(
         except ValueError:
             pass
 
-    jobs = query_jobs(
+    jobs = Job.query(
         status=job_status,
         min_score=min_score if min_score > 0 else None,
         limit=200,
@@ -266,7 +266,7 @@ def register(rt: Any) -> None:
     @rt("/jobs", methods=["get"])
     def get(status: str = "new", min_score: int = 0) -> tuple[object, ...]:
         # Always load approved jobs for the staging area (independent of browse filter)
-        approved_jobs = query_jobs(status=JobStatus.APPROVED, limit=100)
+        approved_jobs = Job.query(status=JobStatus.APPROVED, limit=100)
 
         staging = _build_staging_area(approved_jobs)
 
@@ -328,16 +328,16 @@ def register(rt: Any) -> None:
             result_alert = alert(f"Unexpected error: {str(e)[:150]}", "error")
 
         # OOB-refresh staging area (approved jobs are now in REVIEWING)
-        new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
+        new_approved = Job.query(status=JobStatus.APPROVED, limit=100)
         oob = _build_staging_area(new_approved, oob=True)
         return NotStr(to_xml(result_alert) + to_xml(oob))
 
     @rt("/jobs/unstage-all")
     def post_unstage_all(status: str = "new", min_score: int = 0) -> object:
         """Return all approved jobs back to NEW, clearing the staging area."""
-        approved = query_jobs(status=JobStatus.APPROVED, limit=100)
+        approved = Job.query(status=JobStatus.APPROVED, limit=100)
         for job in approved:
-            update_job(job.id, status=JobStatus.NEW)
+            Job.update(job.id, status=JobStatus.NEW)
         staging = _build_staging_area([])
         browse_oob = _build_jobs_list(status, min_score, oob=True)
         return NotStr(to_xml(staging) + to_xml(browse_oob))
@@ -345,25 +345,25 @@ def register(rt: Any) -> None:
     @rt("/jobs/{job_id}/unapprove")
     def post_unapprove(job_id: str, status: str = "new", min_score: int = 0) -> object:
         """Return an approved job back to NEW, removing it from the staging area."""
-        job = get_job(job_id)
+        job = Job.get(job_id)
         if job is None:
             return alert("Job not found.", "error")
         if job.status != JobStatus.APPROVED:
             return alert(f"Job is {job.status.value}, not approved.", "error")
-        update_job(job_id, status=JobStatus.NEW)
-        new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
+        Job.update(job_id, status=JobStatus.NEW)
+        new_approved = Job.query(status=JobStatus.APPROVED, limit=100)
         staging = _build_staging_area(new_approved)
         browse_oob = _build_jobs_list(status, min_score, oob=True)
         return NotStr(to_xml(staging) + to_xml(browse_oob))
 
     @rt("/jobs/{job_id}/approve")
     def post(job_id: str, status: str = "new", min_score: int = 0) -> object:
-        job = get_job(job_id)
+        job = Job.get(job_id)
         if job is None:
             return alert("Job not found.", "error")
         if job.status != JobStatus.NEW:
             return alert(f"Job is {job.status.value}, not new.", "error")
-        update_job(job_id, status=JobStatus.APPROVED)
+        Job.update(job_id, status=JobStatus.APPROVED)
         card = confirmed_card(
             "job",
             job.id,
@@ -371,17 +371,17 @@ def register(rt: Any) -> None:
             "Approved — added to staging",
         )
         # OOB-refresh staging area and browse list
-        new_approved = query_jobs(status=JobStatus.APPROVED, limit=100)
+        new_approved = Job.query(status=JobStatus.APPROVED, limit=100)
         staging_oob = _build_staging_area(new_approved, oob=True)
         browse_oob = _build_jobs_list(status, min_score, oob=True)
         return NotStr(to_xml(card) + to_xml(staging_oob) + to_xml(browse_oob))
 
     @rt("/jobs/{job_id}/skip")
     def post_skip(job_id: str, status: str = "new", min_score: int = 0) -> object:
-        job = get_job(job_id)
+        job = Job.get(job_id)
         if job is None:
             return alert("Job not found.", "error")
-        update_job(job_id, status=JobStatus.SKIPPED)
+        Job.update(job_id, status=JobStatus.SKIPPED)
         card = confirmed_card("job", job.id, f"{job.title} at {job.company}", "Skipped")
         browse_oob = _build_jobs_list(status, min_score, oob=True)
         return NotStr(to_xml(card) + to_xml(browse_oob))

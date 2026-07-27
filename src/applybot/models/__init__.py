@@ -1,68 +1,17 @@
-from applybot.models.application import (
-    Application,
-    ApplicationStatus,
-    ApplicationStatusUpdate,
-    UpdateSource,
-    add_application,
-    add_status_update,
-    count_applications_by_status,
-    get_application,
-    get_applications_by_statuses,
-    get_status_updates,
-    query_applications,
-    update_application,
-)
-from applybot.models.base import get_db, init_db
-from applybot.models.job import (
-    Job,
-    JobSource,
-    JobStatus,
-    add_job,
-    add_jobs,
-    count_jobs_by_status,
-    get_all_job_urls,
-    get_job,
-    query_jobs,
-    update_job,
-)
-from applybot.models.profile import (
-    ContactInfo,
-    UserProfile,
-    delete_profile,
-    get_profile,
-    save_profile,
-    update_profile_fields,
-)
+from applybot.models.application import Application, ApplicationStatus
+from applybot.models.base import FirestoreModel, get_db, init_db
+from applybot.models.job import Job, JobSource, JobStatus
+from applybot.models.profile import ContactInfo, UserProfile
 
 __all__ = [
     "Application",
     "ApplicationStatus",
-    "ApplicationStatusUpdate",
     "ContactInfo",
+    "FirestoreModel",
     "Job",
     "JobSource",
     "JobStatus",
-    "UpdateSource",
     "UserProfile",
-    "add_application",
-    "add_job",
-    "add_jobs",
-    "add_status_update",
-    "count_applications_by_status",
-    "count_jobs_by_status",
-    "delete_profile",
-    "get_all_job_urls",
-    "get_application",
-    "get_applications_by_statuses",
     "get_db",
-    "get_job",
-    "get_profile",
-    "get_status_updates",
     "init_db",
-    "query_applications",
-    "query_jobs",
-    "save_profile",
-    "update_application",
-    "update_job",
-    "update_profile_fields",
 ]

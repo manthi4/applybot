@@ -10,12 +10,8 @@ from pydantic import BaseModel
 
 from applybot.config import settings
 from applybot.llm.client import get_llm
-from applybot.models.application import (
-    ApplicationStatus,
-    UpdateSource,
-    get_applications_by_statuses,
-)
-from applybot.models.job import get_job
+from applybot.models.application import Application, ApplicationStatus
+from applybot.models.job import Job
 from applybot.tracking.tracker import update_status
 
 logger = logging.getLogger(__name__)
@@ -97,7 +93,7 @@ def _get_gmail_service() -> Any:
 
 def _get_applied_companies() -> list[str]:
     """Get list of companies with submitted applications."""
-    apps = get_applications_by_statuses(
+    apps = Application.by_statuses(
         [
             ApplicationStatus.SUBMITTED,
             ApplicationStatus.RECEIVED,
@@ -105,7 +101,7 @@ def _get_applied_companies() -> list[str]:
     )
     companies: set[str] = set()
     for app in apps:
-        job = get_job(app.job_id)
+        job = Job.get(app.job_id)
         if job:
             companies.add(job.company)
     return list(companies)
@@ -170,10 +166,10 @@ def _process_email(email: dict[str, Any], company: str) -> dict[str, Any] | None
 Company we applied to: {company}
 
 Email:
-From: {email['from']}
-Subject: {email['subject']}
-Date: {email['date']}
-Body: {email['body'][:2000]}
+From: {email["from"]}
+Subject: {email["subject"]}
+Date: {email["date"]}
+Body: {email["body"][:2000]}
 
 Determine:
 1. Is this related to a job application? (automated receipts, rejections, interview invites, offers)
@@ -198,7 +194,7 @@ Determine:
         return None
 
     # Find the matching application
-    apps = get_applications_by_statuses(
+    apps = Application.by_statuses(
         [
             ApplicationStatus.SUBMITTED,
             ApplicationStatus.RECEIVED,
@@ -206,7 +202,7 @@ Determine:
     )
     application = None
     for app in apps:
-        job = get_job(app.job_id)
+        job = Job.get(app.job_id)
         if job and company.lower() in job.company.lower():
             application = app
             break
@@ -216,12 +212,7 @@ Determine:
         return None
 
     try:
-        update_status(
-            application.id,
-            new_status,
-            source=UpdateSource.GMAIL,
-            details=f"Email: {email['subject']} — {result.summary}",
-        )
+        update_status(application.id, new_status)
         return {
             "application_id": application.id,
             "company": company,

@@ -50,9 +50,9 @@ def nav() -> Nav:
     """Top navigation bar with approved-jobs count badge on the Jobs link."""
     approved_count = 0
     try:
-        from applybot.models.job import count_jobs_by_status
+        from applybot.models.job import Job
 
-        approved_count = count_jobs_by_status().get("approved", 0)
+        approved_count = Job.count_by_status().get("approved", 0)
     except Exception:
         logger.warning(
             "Failed to fetch approved job count for nav badge", exc_info=True

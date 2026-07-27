@@ -233,11 +233,11 @@ def mock_firestore():
 
     mock_client = MockFirestoreClient()
 
-    with (
-        patch("applybot.models.base._client", mock_client),
-        patch("applybot.models.job.get_db", return_value=mock_client),
-        patch("applybot.models.application.get_db", return_value=mock_client),
-        patch("applybot.models.profile.get_db", return_value=mock_client),
-    ):
+    with patch("applybot.models.base.get_db", return_value=mock_client):
+        # No previously-cached real client may leak in: clear the lru_cache
+        # after the patch is in place so the next get_db() returns our mock.
+        from applybot.models.base import get_db as _get_db
+
+        _get_db.cache_clear()
         yield mock_client
         mock_client.clear()

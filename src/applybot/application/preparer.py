@@ -10,8 +10,8 @@ from applybot.application.question_answerer import (
     generate_cover_letter,
 )
 from applybot.application.resume_tailor import tailor_resume
-from applybot.models.application import Application, ApplicationStatus, add_application
-from applybot.models.job import Job, JobStatus, query_jobs, update_job
+from applybot.models.application import Application, ApplicationStatus
+from applybot.models.job import Job, JobStatus
 from applybot.profile.manager import ProfileManager
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ def prepare_application(
         profile_gaps=[{"question": g.question, "context": g.context} for g in all_gaps],
         status=ApplicationStatus.READY_FOR_REVIEW,
     )
-    application = add_application(application)
+    application.save()
 
     logger.info(
         "Application prepared: id=%s for job %s (%s at %s), %d gaps",
@@ -87,7 +87,7 @@ def prepare_all_approved() -> list[tuple[Application, list[ProfileGap]]]:
     """Prepare applications for all jobs with APPROVED status."""
     results: list[tuple[Application, list[ProfileGap]]] = []
 
-    approved_jobs = query_jobs(status=JobStatus.APPROVED, limit=500)
+    approved_jobs = Job.query(status=JobStatus.APPROVED, limit=500)
 
     logger.info("Found %d approved jobs to prepare", len(approved_jobs))
 
@@ -95,7 +95,7 @@ def prepare_all_approved() -> list[tuple[Application, list[ProfileGap]]]:
         try:
             app, gaps = prepare_application(job)
             results.append((app, gaps))
-            update_job(job.id, status=JobStatus.REVIEWING)
+            Job.update(job.id, status=JobStatus.REVIEWING)
         except Exception:
             logger.exception("Failed to prepare application for job %s", job.id)
 

@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 
 from applybot.llm.client import get_llm
-from applybot.models.profile import UserProfile, save_profile, update_profile_fields
+from applybot.models.profile import UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ def enrich_profile_with_llm(profile: UserProfile, resume_text: str) -> UserProfi
     if not updated.contact_info.github and profile.contact_info.github:
         updated.contact_info.github = profile.contact_info.github
 
-    save_profile(updated)
+    updated.save()
     logger.info("LLM profile enrichment complete for profile %r", profile.id)
     return updated
 
@@ -127,7 +127,7 @@ async def enrich_profile_with_llm_async(profile: UserProfile, resume_text: str) 
     except Exception:
         logger.exception("LLM profile enrichment failed — profile unchanged")
         try:
-            update_profile_fields(
+            UserProfile.update(
                 enrichment_warning=(
                     "We could not run AI profile enrichment after your resume upload. "
                     "Your profile still includes the standard parsed resume data."

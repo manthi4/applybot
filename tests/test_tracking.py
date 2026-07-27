@@ -2,13 +2,8 @@
 
 import pytest
 
-from applybot.models.application import (
-    Application,
-    ApplicationStatus,
-    add_application,
-    get_status_updates,
-)
-from applybot.models.job import Job, JobSource, add_job
+from applybot.models.application import Application, ApplicationStatus
+from applybot.models.job import Job, JobSource
 from applybot.tracking.tracker import (
     InvalidTransitionError,
     get_applications,
@@ -27,19 +22,18 @@ def _create_application(
         url=f"https://example.com/job/track-{id(status)}-{status.value}",
         source=JobSource.MANUAL,
     )
-    job = add_job(job)
+    job.save()
 
     app = Application(job_id=job.id, status=status)
-    app = add_application(app)
+    app.save()
     return app.id
 
 
 class TestStatusTransitions:
     def test_valid_ready_to_withdrawn(self):
         app_id = _create_application(ApplicationStatus.READY_FOR_REVIEW)
-        from applybot.models.application import UpdateSource
 
-        app = update_status(app_id, ApplicationStatus.WITHDRAWN, UpdateSource.MANUAL)
+        app = update_status(app_id, ApplicationStatus.WITHDRAWN)
         assert app.status == ApplicationStatus.WITHDRAWN
 
     def test_valid_ready_to_approved(self):
@@ -55,11 +49,8 @@ class TestStatusTransitions:
 
     def test_valid_submitted_to_rejected(self):
         app_id = _create_application(ApplicationStatus.SUBMITTED)
-        from applybot.models.application import UpdateSource
 
-        app = update_status(
-            app_id, ApplicationStatus.REJECTED, UpdateSource.GMAIL, "Rejection email"
-        )
+        app = update_status(app_id, ApplicationStatus.REJECTED)
         assert app.status == ApplicationStatus.REJECTED
 
     def test_valid_submitted_to_interview(self):
@@ -85,17 +76,6 @@ class TestStatusTransitions:
     def test_nonexistent_application(self):
         with pytest.raises(ValueError, match="not found"):
             update_status("nonexistent_id", ApplicationStatus.APPROVED)
-
-    def test_status_update_creates_record(self):
-        app_id = _create_application(ApplicationStatus.READY_FOR_REVIEW)
-        from applybot.models.application import UpdateSource
-
-        update_status(app_id, ApplicationStatus.APPROVED, UpdateSource.SYSTEM, "Test")
-
-        updates = get_status_updates(app_id)
-        assert len(updates) == 1
-        assert updates[0].status == ApplicationStatus.APPROVED
-        assert updates[0].details == "Test"
 
 
 class TestGetApplications:

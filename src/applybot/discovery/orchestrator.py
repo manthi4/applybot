@@ -18,7 +18,7 @@ from applybot.discovery.scrapers.euremotejobs import EuRemoteJobsScraper
 from applybot.discovery.scrapers.greenhouse import GreenhouseScraper
 from applybot.discovery.scrapers.lever import LeverScraper
 from applybot.discovery.scrapers.serpapi import SerpAPIScraper
-from applybot.models.job import Job, JobSource, JobStatus, add_jobs, get_all_job_urls
+from applybot.models.job import Job, JobSource, JobStatus
 from applybot.profile.manager import ProfileManager
 
 logger = logging.getLogger(__name__)
@@ -169,7 +169,7 @@ async def run_discovery(
 
 def _save_jobs(ranked: list[tuple[RawJob, int, str]]) -> int:
     """Save ranked jobs to the database, skipping existing URLs."""
-    existing_urls = get_all_job_urls()
+    existing_urls = Job.all_urls()
     new_jobs: list[Job] = []
 
     for raw_job, score, reasoning in ranked:
@@ -195,7 +195,7 @@ def _save_jobs(ranked: list[tuple[RawJob, int, str]]) -> int:
         existing_urls.add(raw_job.url)
 
     if new_jobs:
-        add_jobs(new_jobs)
+        Job.add_many(new_jobs)
     return len(new_jobs)
 
 
