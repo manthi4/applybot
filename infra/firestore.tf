@@ -48,21 +48,3 @@ resource "google_firestore_index" "apps_status_created" {
   depends_on = [google_firestore_database.main]
 }
 
-# Composite index: application_status_updates — application_id + timestamp
-resource "google_firestore_index" "status_updates_app_time" {
-  project    = var.project_id
-  database   = google_firestore_database.main.name
-  collection = "application_status_updates"
-
-  fields {
-    field_path = "application_id"
-    order      = "ASCENDING"
-  }
-
-  fields {
-    field_path = "timestamp"
-    order      = "ASCENDING"
-  }
-
-  depends_on = [google_firestore_database.main]
-}

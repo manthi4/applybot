@@ -33,15 +33,8 @@ from applybot.dashboard.components import (
     page,
     status_badge,
 )
-from applybot.models.application import (
-    Application,
-    ApplicationStatus,
-    UpdateSource,
-    get_application,
-    query_applications,
-    update_application,
-)
-from applybot.models.job import Job, get_job
+from applybot.models.application import Application, ApplicationStatus
+from applybot.models.job import Job
 from applybot.profile.manager import ProfileManager
 from applybot.storage import download_file
 from applybot.tracking.tracker import InvalidTransitionError, update_status
@@ -324,7 +317,7 @@ def register(rt: Any) -> None:
                 app_status = ApplicationStatus(status)
             except ValueError:
                 pass
-        apps = query_applications(status=app_status, limit=200)
+        apps = Application.query(status=app_status, limit=200)
 
         form = filter_form(
             "/apps",
@@ -339,7 +332,7 @@ def register(rt: Any) -> None:
             ],
         )
         count_text = P(Strong(f"{len(apps)} applications"))
-        cards = [_build_app_card(app, get_job(app.job_id)) for app in apps] or [
+        cards = [_build_app_card(app, Job.get(app.job_id)) for app in apps] or [
             alert("No applications found.")
         ]
         return page(H1("Applications"), form, count_text, *cards, title="Applications")
@@ -349,7 +342,7 @@ def register(rt: Any) -> None:
     @rt("/apps/{app_id}/approve", methods=["post"])
     def post_approve(app_id: str) -> object:
         try:
-            update_status(app_id, ApplicationStatus.APPROVED, UpdateSource.MANUAL)
+            update_status(app_id, ApplicationStatus.APPROVED)
             return confirmed_card("app", app_id, f"Application #{app_id}", "Approved")
         except (ValueError, InvalidTransitionError) as e:
             return alert(str(e), "error")
@@ -357,7 +350,7 @@ def register(rt: Any) -> None:
     @rt("/apps/{app_id}/withdraw", methods=["post"])
     def post_withdraw(app_id: str) -> object:
         try:
-            update_status(app_id, ApplicationStatus.WITHDRAWN, UpdateSource.MANUAL)
+            update_status(app_id, ApplicationStatus.WITHDRAWN)
             return confirmed_card("app", app_id, f"Application #{app_id}", "Withdrawn")
         except (ValueError, InvalidTransitionError) as e:
             return alert(str(e), "error")
@@ -366,12 +359,12 @@ def register(rt: Any) -> None:
 
     @rt("/apps/{app_id}/cover-letter", methods=["post"])
     def post_cover_letter(app_id: str, cover_letter: str = "") -> object:
-        app = get_application(app_id)
+        app = Application.get(app_id)
         if app is None:
             return alert(f"Application {app_id} not found.", "error")
         is_terminal = app.status in _TERMINAL
         if not is_terminal:
-            update_application(app_id, cover_letter=cover_letter)
+            Application.update(app_id, cover_letter=cover_letter)
         return _cover_letter_section(
             app_id, cover_letter, terminal=is_terminal, saved=not is_terminal
         )
@@ -380,7 +373,7 @@ def register(rt: Any) -> None:
 
     @rt("/apps/{app_id}/answers", methods=["post"])
     async def post_answers(app_id: str, request: Request) -> object:
-        app = get_application(app_id)
+        app = Application.get(app_id)
         if app is None:
             return alert(f"Application {app_id} not found.", "error")
         form = await request.form()
@@ -394,7 +387,7 @@ def register(rt: Any) -> None:
             i += 1
         is_terminal = app.status in _TERMINAL
         if not is_terminal:
-            update_application(app_id, answers=answers)
+            Application.update(app_id, answers=answers)
             app.answers = answers
         return _qa_section(app, terminal=is_terminal, saved=not is_terminal)
 
@@ -402,12 +395,12 @@ def register(rt: Any) -> None:
 
     @rt("/apps/{app_id}/retailor", methods=["post"])
     def post_retailor(app_id: str) -> object:
-        app = get_application(app_id)
+        app = Application.get(app_id)
         if app is None:
             return alert(f"Application {app_id} not found.", "error")
         if app.status in _TERMINAL:
             return alert("Cannot re-tailor a terminal application.", "error")
-        job = get_job(app.job_id)
+        job = Job.get(app.job_id)
         if job is None:
             return alert(f"Job {app.job_id} not found for this application.", "error")
         try:
@@ -415,7 +408,7 @@ def register(rt: Any) -> None:
             if profile is None:
                 return alert("No profile found -- cannot re-tailor resume.", "error")
             new_path = tailor_resume(job, profile)
-            update_application(app_id, tailored_resume_path=str(new_path))
+            Application.update(app_id, tailored_resume_path=str(new_path))
             app.tailored_resume_path = str(new_path)
             return _resume_section(app)
         except Exception as exc:
@@ -425,7 +418,7 @@ def register(rt: Any) -> None:
 
     @rt("/apps/{app_id}/resume/download", methods=["get"])
     def get_resume_download(app_id: str) -> object:
-        app = get_application(app_id)
+        app = Application.get(app_id)
         if app is None or not app.tailored_resume_path:
             return alert("Resume not found.", "error")
         try:

@@ -31,7 +31,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from applybot.dashboard.components import alert, page
-from applybot.models.profile import ContactInfo, UserProfile, get_profile, save_profile
+from applybot.models.profile import ContactInfo, UserProfile
 from applybot.profile.enrichment import (
     enrich_profile_with_llm_async,
     extract_raw_resume_text,
@@ -248,7 +248,7 @@ def _prefs_display(prefs: dict[str, Any]) -> Any:
 def register(rt: Any) -> None:  # noqa: C901
     @rt("/profile", methods=["get"])
     def get(msg: str = "", error: str = "") -> Any:
-        profile = get_profile()
+        profile = UserProfile.get()
         p = profile or UserProfile(name="")
 
         # Flash message
@@ -475,12 +475,12 @@ def register(rt: Any) -> None:  # noqa: C901
 
     @rt("/profile", methods=["post"])
     def post_basic(name: str = "", summary: str = "") -> RedirectResponse:
-        profile = get_profile()
+        profile = UserProfile.get()
         if profile is None:
             profile = UserProfile(name=name)
         profile.name = name
         profile.summary = summary
-        save_profile(profile)
+        profile.save()
         return RedirectResponse("/profile?msg=basic_saved", status_code=303)
 
     @rt("/profile/contact", methods=["post"])
@@ -490,7 +490,7 @@ def register(rt: Any) -> None:  # noqa: C901
         phone: str = "",
         github: str = "",
     ) -> RedirectResponse:
-        profile = get_profile()
+        profile = UserProfile.get()
         if profile is None:
             profile = UserProfile(name="")
         profile.contact_info = ContactInfo(
@@ -499,12 +499,12 @@ def register(rt: Any) -> None:  # noqa: C901
             phone=phone.strip(),
             github=github.strip(),
         )
-        save_profile(profile)
+        profile.save()
         return RedirectResponse("/profile?msg=contact_saved", status_code=303)
 
     @rt("/profile/resume", methods=["get"])
     def get_resume() -> Response:
-        profile = get_profile()
+        profile = UserProfile.get()
         object_name = profile.resume_path if profile and profile.resume_path else None
         if object_name and file_exists(object_name):
             return get_download_response(object_name, Path(object_name).name)
@@ -548,7 +548,7 @@ def register(rt: Any) -> None:  # noqa: C901
                 logger.exception("Failed to parse uploaded resume")
                 return RedirectResponse("/profile?error=parse_failed", status_code=303)
 
-            profile = get_profile()
+            profile = UserProfile.get()
             if profile is None:
                 profile = UserProfile(name="")
 
@@ -557,7 +557,7 @@ def register(rt: Any) -> None:  # noqa: C901
 
             _map_resume_to_profile(parsed, profile)
 
-            save_profile(profile)
+            profile.save()
 
             # Kick off LLM enrichment in the background — won't delay the response.
             # Raw file text is used (not the heuristic-parsed JSON) so the LLM sees
@@ -576,7 +576,7 @@ def register(rt: Any) -> None:  # noqa: C901
         education: str = "",
         preferences: str = "",
     ) -> RedirectResponse:
-        profile = get_profile()
+        profile = UserProfile.get()
         if profile is None:
             profile = UserProfile(name="")
 
@@ -605,5 +605,5 @@ def register(rt: Any) -> None:  # noqa: C901
             logger.exception("Invalid JSON submitted to /profile/details")
             return RedirectResponse("/profile?error=invalid_json", status_code=303)
 
-        save_profile(profile)
+        profile.save()
         return RedirectResponse("/profile?msg=details_saved", status_code=303)

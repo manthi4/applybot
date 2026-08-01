@@ -8,8 +8,8 @@ Pydantic data models and Firestore CRUD functions. This is the foundational data
 ## File Structure
 ```
 models/
-├── application.py      # `Application`, `ApplicationStatusUpdate` models and CRUD functions
-├── base.py             # Firestore client singleton (`get_db()`, `init_db()`)
+├── application.py      # `Application` model (inherits `FirestoreModel`) + `ApplicationStatus` enum
+├── base.py             # Firestore client (`lru_cache` singleton: `get_db`, `init_db`) + `FirestoreModel` base class
 ├── job.py              # `Job` model and CRUD functions for job listings
 ├── profile.py          # `UserProfile` model with singleton document pattern
 ├── requirements.in     # runtime deps for this module (mirrors root pyproject.toml)
@@ -99,14 +99,26 @@ commit would be slow and brittle. Run the model tests manually (as above) or
 via CI before merging.
 ## Public API
 
+`Job` and `Application` inherit from `FirestoreModel` (in `base.py`), which
+provides document-level CRUD (`get`/`save`/`update`/`count_by_status`) against
+a single auto-ID Firestore collection. `UserProfile` is a standalone
+`pydantic.BaseModel` — its singleton-document pattern (fixed id `"default"`,
+replace-on-save) does not fit the auto-ID collection shape, so it keeps its own
+classmethods.
+
 ### Database Setup
 
 ```python
 from applybot.models.base import get_db, init_db
 
-init_db()              # Verify Firestore connection (no schema needed)
-db = get_db()          # Get Firestore Client singleton
+init_db()              # Eagerly construct the Firestore client (no network round-trip)
+db = get_db()          # Cached client singleton (functools.lru_cache, maxsize=1)
+# To force re-init (e.g. in tests): get_db.cache_clear()
 ```
+
+`get_db()` reads `FIRESTORE_EMULATOR_HOST`/`GOOGLE_CLOUD_PROJECT` from the
+environment (test suite) and falls back to Application Default Credentials
+otherwise. The client is cached for the process lifetime.
 
 ### Enums
 
@@ -115,9 +127,9 @@ from applybot.models.job import JobStatus, JobSource
 # JobStatus: NEW, REVIEWING, APPROVED, SKIPPED, APPLIED, REJECTED
 # JobSource: SERPAPI, GREENHOUSE, LEVER, EU_REMOTE_JOBS, MANUAL
 
-from applybot.models.application import ApplicationStatus, UpdateSource
-# ApplicationStatus: DRAFT → READY_FOR_REVIEW → APPROVED → SUBMITTED → RECEIVED → INTERVIEW → OFFER / REJECTED / WITHDRAWN
-# UpdateSource: MANUAL, GMAIL, SYSTEM
+from applybot.models.application import ApplicationStatus
+# ApplicationStatus: READY_FOR_REVIEW, APPROVED, SUBMITTED, RECEIVED,
+#                    INTERVIEW, OFFER, REJECTED, WITHDRAWN
 ```
 
 ### Pydantic Models
@@ -126,38 +138,40 @@ from applybot.models.application import ApplicationStatus, UpdateSource
 
 | Model | Key Fields | Firestore Collection |
 |---|---|---|
-| `Job` | id, title, company, location, description, url, source, posted_date, relevance_score, status | `jobs` |
+| `FirestoreModel` | id | (base class — `COLLECTION` set by subclasses) |
+| `Job` | id, title, company, location, description, url, source, posted_date, discovered_date, relevance_score, status, hard_requirements, application_questions | `jobs` |
 | `ContactInfo` | email, linkedin, phone, github | (nested in `UserProfile`) |
-| `UserProfile` | name, contact_info, summary, skills, experiences, education, preferences, resume_path | `profiles` (singleton doc `"default"`) |
-| `Application` | id, job_id, tailored_resume_path, cover_letter, answers, status, submitted_at | `applications` |
-| `ApplicationStatusUpdate` | id, application_id, status, source, details, timestamp | `application_status_updates` |
+| `UserProfile` | id, name, contact_info, summary, skills, experiences, education, preferences, resume_path, updated_at | `profiles` (singleton doc `"default"`) |
+| `Application` | id, job_id, tailored_resume_path, cover_letter, answers, profile_gaps, status, created_at, submitted_at | `applications` |
 
-### CRUD Functions
+### CRUD API
 
-**Jobs** (`job.py`):
-- `get_job(job_id: str) -> Job | None`
-- `add_job(job: Job) -> str` — returns generated doc ID
-- `add_jobs(jobs: list[Job]) -> int` — batch write, returns count
-- `update_job(job_id: str, **fields) -> None`
-- `query_jobs(status, min_score, limit) -> list[Job]`
-- `get_all_job_urls() -> set[str]`
-- `count_jobs_by_status() -> dict[str, int]`
+All access is via classmethods on the models (no module-level CRUD functions).
 
-**Applications** (`application.py`):
-- `get_application(app_id: str) -> Application | None`
-- `add_application(app: Application) -> str`
-- `update_application(app_id: str, **fields) -> None`
-- `query_applications(status, limit) -> list[Application]`
-- `count_applications_by_status() -> dict[str, int]`
-- `add_status_update(update: ApplicationStatusUpdate) -> str`
-- `get_status_updates(app_id: str) -> list[ApplicationStatusUpdate]`
-- `get_applications_by_statuses(statuses) -> list[Application]`
+**`FirestoreModel`** (base, `base.py`) — inherited by `Job` and `Application`:
+- `FirestoreModel.get(doc_id) -> Self | None` — fetch by id
+- `instance.save() -> Self` — insert (auto-generated id), populate `self.id`
+- `FirestoreModel.update(doc_id, **fields) -> None` — patch fields
+- `FirestoreModel.count_by_status() -> dict[str, int]` — tally by `status` + `total`
+- `instance.to_doc() -> dict` / `cls.from_doc(doc) -> Self` — (de)serialization hooks
 
-**Profile** (`profile.py`):
-- `get_profile() -> UserProfile | None`
-- `save_profile(profile: UserProfile) -> None`
-- `update_profile_fields(**fields) -> None`
-- `delete_profile() -> None`
+**`Job`** (`job.py`) — inherits `FirestoreModel`, plus:
+- `Job.get(doc_id)`, `job.save()`, `Job.update(doc_id, **fields)`, `Job.count_by_status()`
+- `Job.query(*, status=None, min_score=None, limit=100) -> list[Job]` — ordered by `relevance_score` DESC
+- `Job.add_many(jobs: list[Job]) -> int` — batch write, returns count (mutates each `.id`)
+- `Job.all_urls() -> set[str]` — all existing URLs (for dedup)
+
+**`Application`** (`application.py`) — inherits `FirestoreModel`, plus:
+- `Application.get(doc_id)`, `app.save()`, `Application.update(doc_id, **fields)`, `Application.count_by_status()`
+- `Application.query(*, status=None, limit=100) -> list[Application]` — ordered by `created_at` DESC
+- `Application.by_statuses(statuses: list[ApplicationStatus]) -> list[Application]` — `in` filter
+- `Application.from_doc` migrates the legacy `"draft"` status to `READY_FOR_REVIEW` on read
+
+**`UserProfile`** (`profile.py`) — standalone `BaseModel` (singleton):
+- `UserProfile.get() -> UserProfile | None` — read the singleton doc
+- `profile.save() -> UserProfile` — create or fully replace (sets `updated_at`, `id = "default"`)
+- `UserProfile.update(**fields) -> UserProfile` — patch fields (raises `ValueError` if no profile exists)
+- `UserProfile.delete() -> None`
 
 
 ### Profile (`profile/`)

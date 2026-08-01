@@ -1,4 +1,9 @@
-"""Application and status update models with Firestore CRUD operations."""
+"""Application model with Firestore CRUD operations.
+
+``Application`` inherits :class:`~applybot.models.base.FirestoreModel` for
+document-level CRUD (``get``/``save``/``update``/``count_by_status``);
+application-specific query helpers live as classmethods on the model.
+"""
 
 from __future__ import annotations
 
@@ -7,12 +12,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from google.cloud.firestore_v1.base_query import FieldFilter
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from applybot.models.base import get_db
-
-COLLECTION = "applications"
-STATUS_UPDATES_COLLECTION = "application_status_updates"
+from applybot.models.base import FirestoreModel
 
 
 class ApplicationStatus(str, enum.Enum):
@@ -26,15 +28,12 @@ class ApplicationStatus(str, enum.Enum):
     WITHDRAWN = "withdrawn"
 
 
-class UpdateSource(str, enum.Enum):
-    MANUAL = "manual"
-    SYSTEM = "system"
-
-
-class Application(BaseModel):
+class Application(FirestoreModel):
     """Job application stored in Firestore."""
 
-    id: str = ""
+    COLLECTION = "applications"
+    ENUM_FIELDS = ("status",)
+
     job_id: str = ""
     tailored_resume_path: str = ""
     cover_letter: str = ""
@@ -47,144 +46,42 @@ class Application(BaseModel):
     def __repr__(self) -> str:
         return f"<Application {self.id}: job={self.job_id} status={self.status.value}>"
 
+    @classmethod
+    def from_doc(cls, doc: Any) -> Application:
+        """Build an Application from a Firestore snapshot.
 
-class ApplicationStatusUpdate(BaseModel):
-    """Audit trail entry for application status changes."""
+        Migrates the legacy ``"draft"`` status (removed from the enum) to
+        ``READY_FOR_REVIEW`` on read.
+        """
+        data = doc.to_dict()
+        if data.get("status") == "draft":
+            data["status"] = ApplicationStatus.READY_FOR_REVIEW.value
+        return cls(id=doc.id, **data)
 
-    id: str = ""
-    application_id: str = ""
-    status: ApplicationStatus
-    source: UpdateSource
-    details: str = ""
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # -- application-specific helpers ----------------------------------------
+    @classmethod
+    def query(
+        cls,
+        *,
+        status: ApplicationStatus | None = None,
+        limit: int = 100,
+    ) -> list[Application]:
+        """Query applications with optional status filter. Ordered by created_at desc."""
+        query = cls._collection().order_by("created_at", direction="DESCENDING")
+        if status is not None:
+            query = query.where(filter=FieldFilter("status", "==", status.value))
+        query = query.limit(limit)
+        return [cls.from_doc(doc) for doc in query.stream()]
 
-    def __repr__(self) -> str:
-        return f"<StatusUpdate {self.id}: {self.status.value} via {self.source.value}>"
-
-
-def _app_to_doc(app: Application) -> dict[str, Any]:
-    """Convert an Application to a Firestore-compatible dict."""
-    data = app.model_dump(exclude={"id"})
-    data["status"] = (
-        data["status"].value
-        if isinstance(data["status"], ApplicationStatus)
-        else data["status"]
-    )
-    return data
-
-
-def _doc_to_app(doc: Any) -> Application:
-    """Convert a Firestore document snapshot to an Application."""
-    data = doc.to_dict()
-    # Migrate legacy "draft" status — removed from enum, treat as ready_for_review
-    if data.get("status") == "draft":
-        data["status"] = ApplicationStatus.READY_FOR_REVIEW.value
-    return Application(id=doc.id, **data)
-
-
-def _update_to_doc(update: ApplicationStatusUpdate) -> dict[str, Any]:
-    """Convert an ApplicationStatusUpdate to a Firestore-compatible dict."""
-    data = update.model_dump(exclude={"id"})
-    data["status"] = (
-        data["status"].value
-        if isinstance(data["status"], ApplicationStatus)
-        else data["status"]
-    )
-    data["source"] = (
-        data["source"].value
-        if isinstance(data["source"], UpdateSource)
-        else data["source"]
-    )
-    return data
-
-
-def _doc_to_update(doc: Any) -> ApplicationStatusUpdate:
-    """Convert a Firestore document to an ApplicationStatusUpdate."""
-    data = doc.to_dict()
-    return ApplicationStatusUpdate(id=doc.id, **data)
-
-
-def get_application(app_id: str) -> Application | None:
-    """Get an application by document ID."""
-    doc = get_db().collection(COLLECTION).document(app_id).get()
-    if not doc.exists:
-        return None
-    return _doc_to_app(doc)
-
-
-def add_application(app: Application) -> Application:
-    """Add a new application. Returns with ID populated."""
-    data = _app_to_doc(app)
-    _, ref = get_db().collection(COLLECTION).add(data)
-    app.id = ref.id
-    return app
-
-
-def update_application(app_id: str, **fields: Any) -> None:
-    """Update specific fields on an application document."""
-    # Convert enum values
-    if "status" in fields and hasattr(fields["status"], "value"):
-        fields["status"] = fields["status"].value
-    get_db().collection(COLLECTION).document(app_id).update(fields)
-
-
-def query_applications(
-    *,
-    status: ApplicationStatus | None = None,
-    limit: int = 100,
-) -> list[Application]:
-    """Query applications with optional status filter. Ordered by created_at desc."""
-    ref = get_db().collection(COLLECTION)
-    query = ref.order_by("created_at", direction="DESCENDING")
-    if status is not None:
-        query = query.where(filter=FieldFilter("status", "==", status.value))
-    query = query.limit(limit)
-    return [_doc_to_app(doc) for doc in query.stream()]
-
-
-def count_applications_by_status() -> dict[str, int]:
-    """Count applications grouped by status."""
-    counts: dict[str, int] = {}
-    total = 0
-    for doc in get_db().collection(COLLECTION).select(["status"]).stream():
-        status = doc.to_dict().get("status", "unknown")
-        counts[status] = counts.get(status, 0) + 1
-        total += 1
-    counts["total"] = total
-    return counts
-
-
-def add_status_update(update: ApplicationStatusUpdate) -> ApplicationStatusUpdate:
-    """Add a status update record."""
-    data = _update_to_doc(update)
-    _, ref = get_db().collection(STATUS_UPDATES_COLLECTION).add(data)
-    update.id = ref.id
-    return update
-
-
-def get_status_updates(app_id: str) -> list[ApplicationStatusUpdate]:
-    """Get all status updates for an application."""
-    docs = (
-        get_db()
-        .collection(STATUS_UPDATES_COLLECTION)
-        .where(filter=FieldFilter("application_id", "==", app_id))
-        .order_by("timestamp")
-        .stream()
-    )
-    return [_doc_to_update(doc) for doc in docs]
-
-
-def get_applications_by_statuses(
-    statuses: list[ApplicationStatus],
-) -> list[Application]:
-    """Get applications matching any of the given statuses."""
-    if not statuses:
-        return []
-    status_values = [s.value for s in statuses]
-    docs = (
-        get_db()
-        .collection(COLLECTION)
-        .where(filter=FieldFilter("status", "in", status_values))
-        .stream()
-    )
-    return [_doc_to_app(doc) for doc in docs]
+    @classmethod
+    def by_statuses(cls, statuses: list[ApplicationStatus]) -> list[Application]:
+        """Return applications matching any of the given statuses."""
+        if not statuses:
+            return []
+        status_values = [s.value for s in statuses]
+        docs = (
+            cls._collection()
+            .where(filter=FieldFilter("status", "in", status_values))
+            .stream()
+        )
+        return [cls.from_doc(doc) for doc in docs]

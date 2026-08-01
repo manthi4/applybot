@@ -7,15 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from applybot.models.profile import (
-    ContactInfo,
-    UserProfile,
-    save_profile,
-    update_profile_fields,
-)
-from applybot.models.profile import (
-    get_profile as _get_profile,
-)
+from applybot.models.profile import ContactInfo, UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +19,15 @@ class ProfileManager:
 
     def get_profile(self) -> UserProfile | None:
         """Return the user profile, or None."""
-        return _get_profile()
+        return UserProfile.get()
 
     def get_or_create_profile(self, name: str = "", email: str = "") -> UserProfile:
         """Return existing profile or create a blank one."""
-        profile = _get_profile()
+        profile = UserProfile.get()
         if profile is not None:
             return profile
         profile = UserProfile(name=name, contact_info=ContactInfo(email=email))
-        return save_profile(profile)
+        return profile.save()
 
     def update_profile(self, **kwargs: Any) -> UserProfile:
         """Update profile fields. Accepts any UserProfile field name."""
@@ -44,25 +36,25 @@ class ProfileManager:
         for key in kwargs:
             if key not in valid_fields:
                 raise ValueError(f"Unknown profile field: {key}")
-        return update_profile_fields(**kwargs)
+        return UserProfile.update(**kwargs)
 
     def get_skills(self) -> dict[str, Any]:
         """Return the skills dict from the profile."""
-        profile = _get_profile()
+        profile = UserProfile.get()
         if profile is None:
             return {}
         return profile.skills or {}
 
     def get_experiences(self) -> list[Any]:
         """Return the experiences list from the profile."""
-        profile = _get_profile()
+        profile = UserProfile.get()
         if profile is None:
             return []
         return profile.experiences or []
 
     def export_profile_json(self, path: Path | None = None) -> Path:
         """Export the profile to a JSON file for easy editing."""
-        profile = _get_profile()
+        profile = UserProfile.get()
         if profile is None:
             raise ValueError("No profile exists.")
         path = path or DATA_DIR / "profile.json"
@@ -88,11 +80,11 @@ class ProfileManager:
         # Deserialize nested contact_info dict into a ContactInfo object.
         if "contact_info" in data and isinstance(data["contact_info"], dict):
             data["contact_info"] = ContactInfo(**data["contact_info"])
-        profile = _get_profile()
+        profile = UserProfile.get()
         if profile is None:
             profile = UserProfile(**data)
         else:
             for key, value in data.items():
                 if hasattr(profile, key) and key != "id":
                     setattr(profile, key, value)
-        return save_profile(profile)
+        return profile.save()
