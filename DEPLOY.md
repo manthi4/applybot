@@ -86,7 +86,7 @@ To do it manually (e.g. for a first deploy before CI is configured):
 gcloud auth configure-docker us-central1-docker.pkg.dev
 
 REGISTRY=$(cd infra && terraform output -raw artifact_registry)
-docker build -t applybot -f dashboard/Dockerfile .
+docker build -t applybot -f src/applybot/dashboard/Dockerfile .
 docker tag applybot ${REGISTRY}/applybot:latest
 docker push ${REGISTRY}/applybot:latest
 ```
@@ -154,7 +154,7 @@ To test the Docker build locally before deploying:
 
 ```bash
 # Build
-docker build -t applybot -f dashboard/Dockerfile .
+docker build -t applybot -f src/applybot/dashboard/Dockerfile .
 
 # Run with GCP credentials (Firestore uses ADC)
 docker run -p 8000:8000 \
