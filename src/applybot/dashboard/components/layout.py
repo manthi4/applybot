@@ -8,7 +8,6 @@ from fasthtml.common import (
     A,
     Article,
     Button,
-    Container,
     Form,
     Li,
     Main,
@@ -18,6 +17,7 @@ from fasthtml.common import (
     Strong,
     Ul,
 )
+from fasthtml.pico import Container
 
 logger = logging.getLogger(__name__)
 

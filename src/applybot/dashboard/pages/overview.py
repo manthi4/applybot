@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fasthtml.common import H1, Article, Button, Div, Grid, NotStr, Span, to_xml
+from fasthtml.common import H1, Article, Button, Div, NotStr, Span, to_xml
+from fasthtml.pico import Grid
 
 from applybot.dashboard.components import alert, page, progress_table, stat_card
 from applybot.discovery.orchestrator import run_discovery

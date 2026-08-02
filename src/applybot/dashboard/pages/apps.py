@@ -34,8 +34,8 @@ from applybot.dashboard.components import (
     status_badge,
 )
 from applybot.models.application import Application, ApplicationStatus
-from applybot.models.profile import UserProfile
 from applybot.models.job import Job
+from applybot.models.profile import UserProfile
 from applybot.storage import download_file
 from applybot.tracking.tracker import InvalidTransitionError, update_status
 

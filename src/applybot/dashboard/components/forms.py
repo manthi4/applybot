@@ -8,13 +8,13 @@ from fasthtml.common import (
     Button,
     Div,
     Form,
-    Grid,
     Input,
     Label,
     NotStr,
     Option,
     Select,
 )
+from fasthtml.pico import Grid
 
 
 def filter_form(

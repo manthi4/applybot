@@ -7,13 +7,13 @@ from fasthtml.common import (
     Button,
     Details,
     Div,
-    Group,
     P,
     Pre,
     Small,
     Strong,
     Summary,
 )
+from fasthtml.pico import Group
 
 
 def detail_card(

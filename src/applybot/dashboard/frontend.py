@@ -8,8 +8,6 @@ import pyotp
 from fasthtml.common import (
     H2,
     Button,
-    Card,
-    Container,
     Form,
     Input,
     Label,
@@ -18,6 +16,7 @@ from fasthtml.common import (
     RedirectResponse,
     fast_app,
 )
+from fasthtml.pico import Card, Container
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request

@@ -5,7 +5,6 @@ from __future__ import annotations
 from fasthtml.common import (
     H3,
     Article,
-    Card,
     P,
     Progress,
     Span,
@@ -16,6 +15,7 @@ from fasthtml.common import (
     Thead,
     Tr,
 )
+from fasthtml.pico import Card
 
 
 def stat_card(value: str, label: str) -> Card:
