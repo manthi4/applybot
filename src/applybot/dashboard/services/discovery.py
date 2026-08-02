@@ -1,7 +1,6 @@
 """Discovery service — HTTP client for the discovery Cloud Function.
 
-The dashboard does not import the discovery pipeline directly. Instead it
-triggers the deployed ``applybot-discovery`` Cloud Function over HTTP, passing
+The dashboard triggers the deployed ``applybot-discovery`` Cloud Function over HTTP, passing
 an OIDC identity token so the function's invoker IAM authorizes the call (the
 Cloud Run service account holds ``roles/cloudfunctions.invoker`` on the
 function — see ``infra/cloud_functions.tf``).
@@ -19,7 +18,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
-from applybot.config import settings
+from applybot.dashboard.config import settings
 
 logger = logging.getLogger(__name__)
 

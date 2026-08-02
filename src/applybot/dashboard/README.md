@@ -7,8 +7,10 @@ Central web interface for monitoring and controlling ApplyBot. A FastHTML server
 ```
 dashboard/
 ├── frontend.py       # App setup, auth middleware, login/logout routes, entrypoint
+├── config.py         # Dashboard settings — env-only (no .env); independent of root applybot.config
 ├── theme.py          # Dark slate-blue + slate-red PicoCSS theme overrides
 ├── Dockerfile        # Cloud Run image — multi-stage, amd64, runs the dashboard module directly
+├── docker-compose.yml# Local Docker run — builds the Dockerfile, injects all config as env vars
 ├── requirements.in   # Runtime deps for this module (mirrors root pyproject.toml)
 ├── requirements-dev.in # Dev/test deps for this module
 ├── components/     # Reusable UI components package
@@ -109,6 +111,13 @@ Equivalent: `python -m applybot.dashboard.frontend`.
 ```bash
 docker build -f src/applybot/dashboard/Dockerfile -t applybot .
 docker run -p 8000:8000 applybot   # serves on 0.0.0.0:8000 via `python -m applybot.dashboard.frontend`
+```
+
+**Docker Compose (env-only — no .env loaded):** `docker-compose.yml` builds the
+Dockerfile and injects every setting as a real environment variable. Export the
+vars you need (see the file header), then:
+```bash
+docker compose -f src/applybot/dashboard/docker-compose.yml up --build
 ```
 
 **Cloud Run:** pushes to Cloud Run on every commit to `main` whose message contains `--docker` (workflow `.github/workflows/docker.yml`). The image is built from the repo root with the dashboard Dockerfile, pushed to Artifact Registry, and deployed via `gcloud run deploy applybot`.

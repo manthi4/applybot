@@ -7,7 +7,21 @@ WORKDIR /app
 # Copy only dependency files first for better caching. setuptools>=75.0 is pulled
 # in automatically by pip's build isolation (declared in pyproject.toml [build-system]).
 COPY pyproject.toml .
-COPY src/ src/
+
+# Copy only the applybot subpackages the dashboard actually imports. The dashboard
+# is NOT self-contained — it imports models, application, storage, tracking, llm,
+# and profile (transitively, via application.resume_tailor). Omitted on purpose:
+#   - discovery/  — invoked over HTTP (services/discovery.py), never imported
+#   - cli.py      — entrypoint below runs the dashboard module directly
+# `setuptools.packages.find` (where=["src"]) discovers only the packages present,
+# so a partial src/ tree installs cleanly.
+COPY src/applybot/__init__.py src/applybot/config.py src/applybot/storage.py src/applybot/
+COPY src/applybot/models src/applybot/models
+COPY src/applybot/llm src/applybot/llm
+COPY src/applybot/profile src/applybot/profile
+COPY src/applybot/application src/applybot/application
+COPY src/applybot/tracking src/applybot/tracking
+COPY src/applybot/dashboard src/applybot/dashboard
 
 # Install the package and dependencies
 RUN pip install --no-cache-dir .

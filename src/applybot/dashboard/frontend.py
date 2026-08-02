@@ -23,8 +23,8 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
 from starlette.responses import RedirectResponse as StarletteRedirect
 
-from applybot.config import settings
 from applybot.dashboard.components import alert
+from applybot.dashboard.config import settings
 from applybot.dashboard.pages import apps, jobs, overview, profile
 from applybot.dashboard.theme import theme_headers
 
