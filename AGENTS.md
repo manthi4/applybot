@@ -21,17 +21,9 @@ ruff format src/
 black --check src/
 mypy src/
 
-# Start the dashboard locally (port 8000)
-python -m applybot
-
-# Initialize database (one-time)
-python -c "from applybot.models.base import init_db; init_db()"
-
 # Set up pre-commit hooks
 pre-commit install
 ```
-
-`applybot` is also accessible as a CLI entry point (see `pyproject.toml` `[project.scripts]`).
 
 ## Coding Style & Naming Conventions
 

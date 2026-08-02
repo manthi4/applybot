@@ -83,13 +83,7 @@ DASHBOARD_TOTP_SECRET=<base32-secret>
 
 ### Running the Dashboard
 
-```bash
-applybot serve
-applybot serve --host 0.0.0.0 --port 8080 --reload
-
-# Or directly:
-python -m applybot serve
-```
+!! Section needs to be updated, should be deploying dashboard through the dockerfile
 
 ## Boundaries
 

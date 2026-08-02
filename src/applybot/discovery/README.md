@@ -117,7 +117,7 @@ ranked: list[tuple[RawJob, int, str]] = rank_jobs(jobs, profile)
 
 ### Cloud Function (GCP)
 
-Discovery runs as a **Cloud Functions Gen 2** HTTP function. It must be triggered manually — either via the CLI locally, or by sending an HTTP POST to the function URL in GCP.
+Discovery runs as a **Cloud Functions Gen 2** HTTP function. It must be triggered manually by sending an HTTP POST to the function URL in GCP (or via `gcloud`, below).
 
 - **Entry point**: `handle_discovery` in `src/applybot/discovery/main.py`
 - **Runtime**: Python 3.12, 512Mi memory, 300s timeout
@@ -129,18 +129,11 @@ To invoke the deployed function manually via `gcloud`:
 gcloud functions call applybot-discovery --region=us-central1
 ```
 
-### CLI (local)
-
-```bash
-applybot run-discovery
-applybot run-discovery --location "Remote" --max-results 50
-```
-
 ## Boundaries
 
 - **Depends on**: `models` (Job, JobStatus, JobSource), `llm` (query building, ranking), `profile` (user profile for queries and ranking), `config` (API keys, thresholds)
 - **Does not depend on**: Application, Tracking, or Dashboard
-- **Used by**: CLI/scheduler entry points, Dashboard (via DB)
+- **Used by**: scheduler entry points, Dashboard (via DB)
 - Scrapers are isolated from each other — one scraper failing doesn't block others
 - The orchestrator is the only component that writes to the database; individual scrapers return `RawJob` dataclasses
 - Greenhouse/Lever scrapers require curated company slug lists (currently empty — needs population)
