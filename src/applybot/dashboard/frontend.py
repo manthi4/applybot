@@ -145,10 +145,23 @@ def healthz() -> PlainTextResponse:
     return PlainTextResponse("ok")
 
 
-def main(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None:
-    """Start the FastHTML dashboard server."""
+def main(
+    host: str | None = None, port: int | None = None, reload: bool = False
+) -> None:
+    """Start the FastHTML dashboard server.
+
+    ``host``/``port`` fall back to the ``HOST``/``PORT`` environment variables
+    (Cloud Run sets ``PORT``) and then to ``settings`` — so the module can be
+    run directly (``python -m applybot.dashboard.frontend``) without the
+    top-level ``applybot`` CLI defined outside this module.
+    """
+    import os
+
     import uvicorn
 
+    host = host or os.getenv("HOST", "127.0.0.1")
+    if port is None:
+        port = settings.port
     print(f"Starting ApplyBot dashboard at http://{host}:{port}")
     uvicorn.run(
         "applybot.dashboard.frontend:app",

@@ -70,6 +70,10 @@ resource "google_cloud_run_v2_service" "applybot" {
         name  = "GCS_BUCKET_NAME"
         value = google_storage_bucket.data.name
       }
+      env {
+        name  = "DISCOVERY_FUNCTION_URL"
+        value = google_cloudfunctions2_function.discovery.url
+      }
 
       dynamic "env" {
         for_each = var.serpapi_key != "" ? [1] : []

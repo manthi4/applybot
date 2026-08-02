@@ -4,10 +4,8 @@ FROM --platform=linux/amd64 python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN pip install --no-cache-dir setuptools>=75.0
-
-# Copy only dependency files first for better caching
+# Copy only dependency files first for better caching. setuptools>=75.0 is pulled
+# in automatically by pip's build isolation (declared in pyproject.toml [build-system]).
 COPY pyproject.toml .
 COPY src/ src/
 
@@ -18,16 +16,22 @@ FROM --platform=linux/amd64 python:3.12-slim
 
 WORKDIR /app
 
-# Copy installed packages from builder
+# Copy installed packages (including the applybot package itself) from builder.
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code
-COPY src/ src/
-
-# Cloud Run sets PORT env var, default to 8000
-ENV PORT=8000
+# Lean runtime: unbuffered stdout/stderr for Cloud Run logging, no .pyc files.
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8000 \
+    HOST=0.0.0.0
 
 EXPOSE ${PORT}
 
-ENTRYPOINT echo "Starting ApplyBot dashboard on port ${PORT:-8000}..." && exec applybot serve --host 0.0.0.0 --port "${PORT:-8000}"
+# Run as a non-root user for least privilege.
+RUN useradd --create-home --uid 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Run the dashboard module directly — no dependency on the top-level
+# `applybot` CLI (src/applybot/cli.py), which lives outside this module.
+ENTRYPOINT ["python", "-m", "applybot.dashboard.frontend"]

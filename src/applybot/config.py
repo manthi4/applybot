@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # Dashboard auth (TOTP — use `applybot setup-auth` to generate and scan QR code)
     dashboard_totp_secret: str = ""
 
+    # Discovery — URL of the deployed discovery Cloud Function (infra/cloud_functions.tf).
+    # The dashboard triggers discovery over HTTP rather than importing the pipeline.
+    discovery_function_url: str = ""
+
     # Discovery
     discovery_relevance_threshold: int = 50
     discovery_max_jobs_per_run: int = 100
