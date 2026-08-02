@@ -19,7 +19,7 @@ from applybot.discovery.scrapers.greenhouse import GreenhouseScraper
 from applybot.discovery.scrapers.lever import LeverScraper
 from applybot.discovery.scrapers.serpapi import SerpAPIScraper
 from applybot.models.job import Job, JobSource, JobStatus
-from applybot.profile.manager import ProfileManager
+from applybot.models.profile import UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +112,7 @@ async def run_discovery(
     max_results = max_results or settings.discovery_max_jobs_per_run
 
     # Get user profile
-    pm = ProfileManager()
-    profile = pm.get_profile()
+    profile = UserProfile.get()
 
     # Build search queries
     queries = build_search_queries(profile)

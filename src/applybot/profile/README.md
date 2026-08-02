@@ -4,26 +4,10 @@ Manages the user's profile (structured data about skills, experiences, interests
 
 ## Files
 
-- **manager.py** — `ProfileManager` for CRUD operations and JSON import/export
 - **resume.py** — Parse resumes into structured data and generate tailored .docx files
+- **enrichment.py** — LLM-based profile enrichment after resume upload
 
 ## Public API
-
-### ProfileManager
-
-```python
-from applybot.profile.manager import ProfileManager
-
-pm = ProfileManager()
-
-profile = pm.get_profile()                         # UserProfile | None
-profile = pm.get_or_create_profile("Name", "email") # Create if missing
-profile = pm.update_profile(summary="...", skills={...})
-skills  = pm.get_skills()                          # dict[str, Any]
-
-pm.export_profile_json(Path("profile.json"))       # Dump to file
-pm.import_profile_json(Path("profile.json"))       # Load from file
-```
 
 ### Resume
 
@@ -91,14 +75,14 @@ applybot bootstrap-profile resume.pdf --name "Jane Doe" --email jane@example.com
 applybot bootstrap-profile resume.md
 ```
 
-Parses the resume, extracts name/summary/skills/experiences/education sections, and stores them in the database via ProfileManager.
+Parses the resume, extracts name/summary/skills/experiences/education sections, and stores them in the database via `UserProfile`.
 
 ## Boundaries
 
 - **Depends on**: `models` (UserProfile + Firestore CRUD), `config` (GCP project), `llm` (LLM client, used only in `enrichment.py`)
 - **Does not depend on**: Discovery, Application, or Tracking
 - **Used by**: Discovery (query building, relevance ranking), Application (resume tailoring, Q&A), Dashboard (profile display/edit)
-- ProfileManager owns all DB access for the UserProfile table
+- `UserProfile` owns all DB access for the profile table (get/save/update/delete)
 - Resume functions are pure file I/O — no database or LLM calls
 - `parse_resume()` is called by the dashboard's `POST /profile/resume` endpoint to parse uploaded files and backfill profile fields (name, summary)
 - `enrich_profile_with_llm_async()` is called as a background task by the same endpoint after the heuristic parse to let the LLM fill in any remaining gaps

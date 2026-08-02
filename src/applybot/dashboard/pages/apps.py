@@ -34,8 +34,8 @@ from applybot.dashboard.components import (
     status_badge,
 )
 from applybot.models.application import Application, ApplicationStatus
+from applybot.models.profile import UserProfile
 from applybot.models.job import Job
-from applybot.profile.manager import ProfileManager
 from applybot.storage import download_file
 from applybot.tracking.tracker import InvalidTransitionError, update_status
 
@@ -404,7 +404,7 @@ def register(rt: Any) -> None:
         if job is None:
             return alert(f"Job {app.job_id} not found for this application.", "error")
         try:
-            profile = ProfileManager().get_profile()
+            profile = UserProfile.get()
             if profile is None:
                 return alert("No profile found -- cannot re-tailor resume.", "error")
             new_path = tailor_resume(job, profile)

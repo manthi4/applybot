@@ -176,12 +176,8 @@ All access is via classmethods on the models (no module-level CRUD functions).
 
 ### Profile (`profile/`)
 
-**ProfileManager** — CRUD operations for the UserProfile table:
-- `get_profile()`, `get_or_create_profile(name, email)`, `update_profile(**kwargs)`
-- `get_skills()`, `export_profile_json(path)`, `import_profile_json(path)`
-
 **Resume** — .docx parsing and generation:
 - `parse_resume(path)` → `ResumeData` (name, contact_info, sections with title + content)
 - `generate_resume(data, template_path, output_path)` → creates tailored .docx preserving template formatting
 
-**Bootstrap flow** (planned): On first run, parse existing resume → extract structured profile → store in DB → agent identifies gaps → interactive CLI to fill them in.
+**Bootstrap flow** (planned): On first run, parse existing resume → extract structured profile → store in DB

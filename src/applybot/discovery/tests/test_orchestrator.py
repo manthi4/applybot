@@ -96,12 +96,12 @@ class TestRunDiscovery:
     @patch("applybot.discovery.orchestrator.rank_jobs")
     @patch("applybot.discovery.orchestrator.deduplicate")
     @patch("applybot.discovery.orchestrator.build_search_queries")
-    @patch("applybot.discovery.orchestrator.ProfileManager")
+    @patch("applybot.discovery.orchestrator.UserProfile")
     @patch("applybot.discovery.orchestrator.settings")
     async def test_full_pipeline_flow(
         self,
         mock_settings,
-        mock_pm_cls,
+        mock_userprofile,
         mock_build_queries,
         mock_dedup,
         mock_rank,
@@ -110,7 +110,7 @@ class TestRunDiscovery:
         # Setup
         mock_settings.discovery_max_jobs_per_run = 100
         mock_profile = MagicMock()
-        mock_pm_cls.return_value.get_profile.return_value = mock_profile
+        mock_userprofile.get.return_value = mock_profile
 
         mock_build_queries.return_value = ["ml engineer"]
 
@@ -149,18 +149,18 @@ class TestRunDiscovery:
     @patch("applybot.discovery.orchestrator._save_jobs")
     @patch("applybot.discovery.orchestrator.deduplicate")
     @patch("applybot.discovery.orchestrator.build_search_queries")
-    @patch("applybot.discovery.orchestrator.ProfileManager")
+    @patch("applybot.discovery.orchestrator.UserProfile")
     @patch("applybot.discovery.orchestrator.settings")
     async def test_no_profile_skips_ranking(
         self,
         mock_settings,
-        mock_pm_cls,
+        mock_userprofile,
         mock_build_queries,
         mock_dedup,
         mock_save,
     ):
         mock_settings.discovery_max_jobs_per_run = 100
-        mock_pm_cls.return_value.get_profile.return_value = None
+        mock_userprofile.get.return_value = None
         mock_build_queries.return_value = ["default query"]
 
         scraped_jobs = [make_raw_job(url="https://a.com/1")]
@@ -182,12 +182,12 @@ class TestRunDiscovery:
     @patch("applybot.discovery.orchestrator.rank_jobs")
     @patch("applybot.discovery.orchestrator.deduplicate")
     @patch("applybot.discovery.orchestrator.build_search_queries")
-    @patch("applybot.discovery.orchestrator.ProfileManager")
+    @patch("applybot.discovery.orchestrator.UserProfile")
     @patch("applybot.discovery.orchestrator.settings")
     async def test_scraper_failure_doesnt_crash_pipeline(
         self,
         mock_settings,
-        mock_pm_cls,
+        mock_userprofile,
         mock_build_queries,
         mock_dedup,
         mock_rank,
@@ -195,7 +195,7 @@ class TestRunDiscovery:
     ):
         mock_settings.discovery_max_jobs_per_run = 100
         mock_profile = MagicMock()
-        mock_pm_cls.return_value.get_profile.return_value = mock_profile
+        mock_userprofile.get.return_value = mock_profile
         mock_build_queries.return_value = ["q"]
 
         # One scraper succeeds, one fails
@@ -222,19 +222,19 @@ class TestRunDiscovery:
     @patch("applybot.discovery.orchestrator.rank_jobs")
     @patch("applybot.discovery.orchestrator.deduplicate")
     @patch("applybot.discovery.orchestrator.build_search_queries")
-    @patch("applybot.discovery.orchestrator.ProfileManager")
+    @patch("applybot.discovery.orchestrator.UserProfile")
     @patch("applybot.discovery.orchestrator.settings")
     async def test_empty_scraper_results(
         self,
         mock_settings,
-        mock_pm_cls,
+        mock_userprofile,
         mock_build_queries,
         mock_dedup,
         mock_rank,
         mock_save,
     ):
         mock_settings.discovery_max_jobs_per_run = 100
-        mock_pm_cls.return_value.get_profile.return_value = MagicMock()
+        mock_userprofile.get.return_value = MagicMock()
         mock_build_queries.return_value = ["q"]
 
         scraper = AsyncMock(spec=BaseScraper)
