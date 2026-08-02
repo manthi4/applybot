@@ -8,7 +8,12 @@ Central web interface for monitoring and controlling ApplyBot. A FastHTML server
 dashboard/
 ├── frontend.py       # App setup, auth middleware, login/logout routes, entrypoint
 ├── theme.py          # Dark slate-blue + slate-red PicoCSS theme overrides
-├── components.py     # Reusable UI components (nav, page, cards, forms, badges)
+├── components/     # Reusable UI components package
+│   ├── __init__.py        # Re-exports the public API (nav, page, cards, forms, badges)
+│   ├── layout.py          # nav(), page(), alert()
+│   ├── data_display.py    # stat_card(), progress_table(), status_badge()
+│   ├── forms.py           # filter_form()
+│   └── cards.py           # detail_card(), action_buttons(), confirmed_card(), collapsible_text()
 ├── pages/
 │   ├── __init__.py
 │   ├── overview.py   # Overview page — stats cards and pipeline progress
@@ -26,11 +31,11 @@ The frontend uses a modular architecture:
 
 - **`theme.py`** — CSS custom properties overriding PicoCSS defaults. Dark slate-blue backgrounds (#0f172a, #1e293b), slate-red accents (#dc2626), and colored status badges. Exports `theme_headers` tuple for `fast_app(hdrs=...)`.
 
-- **`components.py`** — Reusable building blocks:
-  - Layout: `nav()`, `page()`, `alert()`
-  - Data display: `stat_card()`, `progress_table()`, `status_badge()`
-  - Forms: `filter_form()`
-  - Cards: `detail_card()`, `action_buttons()`, `confirmed_card()`, `collapsible_text()`
+- **`components/`** — Reusable UI building blocks, split by category (re-exported from `__init__.py` so pages import as `from applybot.dashboard.components import <name>`):
+  - `layout.py`: `nav()`, `page()`, `alert()`
+  - `data_display.py`: `stat_card()`, `progress_table()`, `status_badge()`
+  - `forms.py`: `filter_form()`
+  - `cards.py`: `detail_card()`, `action_buttons()`, `confirmed_card()`, `collapsible_text()`
 
 - **`pages/`** — Each page module exports a `register(rt)` function that decorates route handlers onto the FastHTML route table.
 
