@@ -31,12 +31,12 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from applybot.dashboard.components import alert, page
-from applybot.models.profile import ContactInfo, UserProfile
-from applybot.profile.enrichment import (
+from applybot.dashboard.services.enrichment import (
     enrich_profile_with_llm_async,
     extract_raw_resume_text,
 )
-from applybot.profile.resume import ResumeData, parse_resume
+from applybot.dashboard.services.resume import ResumeData, parse_resume
+from applybot.models.profile import ContactInfo, UserProfile
 from applybot.storage import file_exists, get_download_response, upload_file
 
 logger = logging.getLogger(__name__)

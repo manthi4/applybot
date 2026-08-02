@@ -14,6 +14,10 @@ dashboard/
 │   ├── data_display.py    # stat_card(), progress_table(), status_badge()
 │   ├── forms.py           # filter_form()
 │   └── cards.py           # detail_card(), action_buttons(), confirmed_card(), collapsible_text()
+├── services/         # Dashboard-local domain logic (resume parsing + LLM enrichment)
+│   ├── __init__.py
+│   ├── resume.py          # parse_resume() / ResumeData — heuristic resume parser
+│   └── enrichment.py      # fire-and-forget LLM profile enrichment after upload
 ├── pages/
 │   ├── __init__.py
 │   ├── overview.py   # Overview page — stats cards and pipeline progress
@@ -52,7 +56,7 @@ The frontend uses a modular architecture:
 3. **Applications** (`/apps`) — Applications by status with cover letter, answers, and review actions
 4. **Profile** (`/profile`) — Full profile editor with multiple sections:
    - **Basic Info**: Edit name, email, summary
-   - **Resume upload**: Upload `.docx`, `.pdf`, or `.md` files — auto-parsed with `parse_resume()`, saved to `data/resume.<ext>` (preserving the uploaded format), backfills empty name/summary; resume sections are mapped to profile fields by keyword matching via `_map_resume_to_profile()`. **Parsing is heuristic-only (no LLM).** PDF support requires a text-based PDF (scanned PDFs won't work).
+   - **Resume upload**: Upload `.docx`, `.pdf`, or `.md` files — auto-parsed with `parse_resume()` (dashboard-local, `services/resume.py`), saved to `data/resume.<ext>` (preserving the uploaded format), backfills empty name/summary; resume sections are mapped to profile fields by keyword matching via `_map_resume_to_profile()`. **Parsing is heuristic-only (no LLM).** After the heuristic save, a fire-and-forget background task (`services/enrichment.py`) asks the LLM to enrich the profile. PDF support requires a text-based PDF (scanned PDFs won't work).
    - **Skills / Experience / Education / Preferences**: Structured display + collapsible edit forms (`Details`/`Summary`) with JSON textarea editors and schema placeholder examples
    - **Raw JSON**: Collapsible full profile JSON view
    - **Flash messages**: Success/error alerts after each action
@@ -87,8 +91,8 @@ DASHBOARD_TOTP_SECRET=<base32-secret>
 
 ## Boundaries
 
-- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret), `tracking` (status transitions), `application` (for the Build Approved Applications button)
-- **Does not depend on**: LLM, Discovery, Application, or Profile modules directly
+- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret), `tracking` (status transitions), `application` (for the Build Approved Applications button), `llm` (profile enrichment after resume upload, via `services/enrichment.py`)
+- **Does not depend on**: Discovery or Profile modules (resume parsing and enrichment are dashboard-local under `services/`)
 - **Used by**: End users via browser (authenticated with TOTP)
 
 
