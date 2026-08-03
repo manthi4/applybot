@@ -24,7 +24,6 @@ from fasthtml.common import (
 from starlette.requests import Request
 from starlette.responses import Response
 
-from applybot.application.resume_tailor import tailor_resume
 from applybot.dashboard.components import (
     alert,
     confirmed_card,
@@ -406,7 +405,7 @@ def register(rt: Any) -> None:
             profile = UserProfile.get()
             if profile is None:
                 return alert("No profile found -- cannot re-tailor resume.", "error")
-            new_path = tailor_resume(job, profile)
+            raise NotImplementedError("Re-tailoring is not implemented in this version.")
             Application.update(app_id, tailored_resume_path=str(new_path))
             app.tailored_resume_path = str(new_path)
             return _resume_section(app)

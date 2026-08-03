@@ -30,8 +30,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY src/applybot/__init__.py src/applybot/config.py src/applybot/storage.py src/applybot/
 COPY src/applybot/models src/applybot/models
 COPY src/applybot/llm src/applybot/llm
-COPY src/applybot/profile src/applybot/profile
-COPY src/applybot/application src/applybot/application
 COPY src/applybot/dashboard src/applybot/dashboard
 
 # 4. Install local package without re-downloading dependencies

@@ -34,4 +34,9 @@ class Settings(BaseSettings):
     # The dashboard triggers discovery over HTTP rather than importing the pipeline.
     discovery_function_url: str = ""
 
+    # Application preparer — URL of the deployed application-preparer Cloud Function.
+    # The dashboard triggers application preparation over HTTP rather than importing
+    # the preparer (mirror of the discovery function pattern).
+    application_preparer_function_url: str = ""
+
 settings = Settings()
