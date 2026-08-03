@@ -32,7 +32,6 @@ COPY src/applybot/models src/applybot/models
 COPY src/applybot/llm src/applybot/llm
 COPY src/applybot/profile src/applybot/profile
 COPY src/applybot/application src/applybot/application
-COPY src/applybot/tracking src/applybot/tracking
 COPY src/applybot/dashboard src/applybot/dashboard
 
 # 4. Install local package without re-downloading dependencies

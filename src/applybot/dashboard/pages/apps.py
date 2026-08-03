@@ -37,7 +37,6 @@ from applybot.models.application import Application, ApplicationStatus
 from applybot.models.job import Job
 from applybot.models.profile import UserProfile
 from applybot.storage import download_file
-from applybot.tracking.tracker import InvalidTransitionError, update_status
 
 _TERMINAL = {ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN}
 
@@ -342,17 +341,17 @@ def register(rt: Any) -> None:
     @rt("/apps/{app_id}/approve", methods=["post"])
     def post_approve(app_id: str) -> object:
         try:
-            update_status(app_id, ApplicationStatus.APPROVED)
+            Application.set_status(app_id, ApplicationStatus.APPROVED)
             return confirmed_card("app", app_id, f"Application #{app_id}", "Approved")
-        except (ValueError, InvalidTransitionError) as e:
+        except ValueError as e:
             return alert(str(e), "error")
 
     @rt("/apps/{app_id}/withdraw", methods=["post"])
     def post_withdraw(app_id: str) -> object:
         try:
-            update_status(app_id, ApplicationStatus.WITHDRAWN)
+            Application.set_status(app_id, ApplicationStatus.WITHDRAWN)
             return confirmed_card("app", app_id, f"Application #{app_id}", "Withdrawn")
-        except (ValueError, InvalidTransitionError) as e:
+        except ValueError as e:
             return alert(str(e), "error")
 
     # -- Cover-letter save ----------------------------------------------------

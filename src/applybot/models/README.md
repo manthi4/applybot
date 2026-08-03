@@ -165,6 +165,7 @@ All access is via classmethods on the models (no module-level CRUD functions).
 - `Application.get(doc_id)`, `app.save()`, `Application.update(doc_id, **fields)`, `Application.count_by_status()`
 - `Application.query(*, status=None, limit=100) -> list[Application]` — ordered by `created_at` DESC
 - `Application.by_statuses(statuses: list[ApplicationStatus]) -> list[Application]` — `in` filter
+- `Application.set_status(application_id, new_status) -> Application` — set status directly; stamps `submitted_at` when becoming `SUBMITTED`; raises `ValueError` if not found
 - `Application.from_doc` migrates the legacy `"draft"` status to `READY_FOR_REVIEW` on read
 
 **`UserProfile`** (`profile.py`) — standalone `BaseModel` (singleton):
