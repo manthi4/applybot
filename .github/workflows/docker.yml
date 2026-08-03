@@ -43,7 +43,9 @@ jobs:
           echo "REGISTRY=${REGISTRY}" >> "$GITHUB_ENV"
 
       - name: Build Docker image
-        run: docker build -t applybot -f src/applybot/dashboard/Dockerfile .
+        run: |
+          # Cloud Run runs on amd64; pin the platform so the image matches the target arch.
+          docker build --platform linux/amd64 -t applybot -f src/applybot/dashboard/Dockerfile .
 
       - name: Tag and push
         run: |

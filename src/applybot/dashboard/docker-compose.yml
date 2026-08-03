@@ -19,6 +19,13 @@ services:
     env_file:
       # Relative to this compose file → repo-root .env.local.
       - ../../../.env.local
+    # Mount the GCP service-account JSON read-only into the container.
+    # Host path is relative to THIS compose file (src/applybot/dashboard/),
+    # so `../../../` climbs to the repo root where service-account.json lives
+    # (alongside .env.local). Keep read-only. The in-container path
+    # /app/service-account.json must match GOOGLE_APPLICATION_CREDENTIALS.
+    volumes:
+      - ../../../service-account.json:/app/service-account.json:ro
     ports:
       - "8000:8000"
     restart: unless-stopped

@@ -1,20 +1,32 @@
-# Explicitly target amd64 so images built on ARM machines (e.g. Apple Silicon, Windows ARM)
-# are always compatible with Cloud Run, which only supports linux/amd64.
-FROM --platform=linux/amd64 python:3.12-slim AS builder
+FROM python:3.12-slim
+
+# Copy the lightweight uv binary from Astral's official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Copy only dependency files first for better caching. setuptools>=75.0 is pulled
-# in automatically by pip's build isolation (declared in pyproject.toml [build-system]).
+# Environment configuration:
+# - UV_SYSTEM_PYTHON=1: Tells uv to install into standard system Python (no venv needed in single-stage)
+# - UV_COMPILE_BYTECODE=1: Pre-compiles .pyc files for faster Cloud Run container startup times
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_SYSTEM_PYTHON=1 \
+    UV_COMPILE_BYTECODE=1 \
+    PORT=8000 \
+    HOST=0.0.0.0
+
+EXPOSE ${PORT}
+
+# 1. Copy project metadata first for layer caching
 COPY pyproject.toml .
 
-# Copy only the applybot subpackages the dashboard actually imports. The dashboard
-# is NOT self-contained — it imports models, application, storage, tracking, llm,
-# and profile (transitively, via application.resume_tailor). Omitted on purpose:
-#   - discovery/  — invoked over HTTP (services/discovery.py), never imported
-#   - cli.py      — entrypoint below runs the dashboard module directly
-# `setuptools.packages.find` (where=["src"]) discovers only the packages present,
-# so a partial src/ tree installs cleanly.
+# 2. Dummy package setup + BuildKit cache mount
+# The cache mount keeps downloaded wheel files on the host machine across rebuilds
+RUN mkdir -p src/applybot && touch src/applybot/__init__.py
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install .
+
+# 3. Copy actual application source code
 COPY src/applybot/__init__.py src/applybot/config.py src/applybot/storage.py src/applybot/
 COPY src/applybot/models src/applybot/models
 COPY src/applybot/llm src/applybot/llm
@@ -23,29 +35,12 @@ COPY src/applybot/application src/applybot/application
 COPY src/applybot/tracking src/applybot/tracking
 COPY src/applybot/dashboard src/applybot/dashboard
 
-# Install the package and dependencies
-RUN pip install --no-cache-dir .
+# 4. Install local package without re-downloading dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --no-deps .
 
-FROM --platform=linux/amd64 python:3.12-slim
-
-WORKDIR /app
-
-# Copy installed packages (including the applybot package itself) from builder.
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Lean runtime: unbuffered stdout/stderr for Cloud Run logging, no .pyc files.
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000 \
-    HOST=0.0.0.0
-
-EXPOSE ${PORT}
-
-# Run as a non-root user for least privilege.
+# 5. Non-root user for Cloud Run security best practices
 RUN useradd --create-home --uid 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Run the dashboard module directly — no dependency on the top-level
-# `applybot` CLI (src/applybot/cli.py), which lives outside this module.
 ENTRYPOINT ["python", "-m", "applybot.dashboard.frontend"]

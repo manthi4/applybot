@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 
 import pyotp
 from fasthtml.common import (
+    H1,
     H2,
     Button,
     Form,
@@ -15,18 +17,23 @@ from fasthtml.common import (
     P,
     RedirectResponse,
     fast_app,
+    to_xml,
 )
 from fasthtml.pico import Card, Container
+from google.api_core.exceptions import GoogleAPICallError, ServiceUnavailable
+from google.auth.exceptions import DefaultCredentialsError, RefreshError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse, Response
+from starlette.responses import HTMLResponse, PlainTextResponse, Response
 from starlette.responses import RedirectResponse as StarletteRedirect
 
-from applybot.dashboard.components import alert
+from applybot.dashboard.components import alert, page
 from applybot.dashboard.config import settings
 from applybot.dashboard.pages import apps, jobs, overview, profile
 from applybot.dashboard.theme import theme_headers
+
+logger = logging.getLogger(__name__)
 
 app, rt = fast_app(
     title="ApplyBot Dashboard",
@@ -69,6 +76,56 @@ app.add_middleware(
     https_only=bool(settings.dashboard_totp_secret),
     max_age=86400,  # 24-hour session
 )
+
+# ---------- Firestore error handling ----------
+#
+# When Firestore credentials are missing/invalid or the service is
+# unreachable, the underlying google libraries raise.  Without these
+# handlers every dashboard page that touches Firestore returns a raw 500
+# traceback.  Instead render a helpful HTML page (status 503) so the user
+# knows how to fix the configuration.
+
+_CREDENTIAL_ERRORS: tuple[type[Exception], ...] = (
+    DefaultCredentialsError,
+    RefreshError,
+)
+_CONNECTION_ERRORS: tuple[type[Exception], ...] = (
+    ServiceUnavailable,
+    GoogleAPICallError,
+    ConnectionError,
+)
+
+_CREDENTIAL_MESSAGE = (
+    "The dashboard could not authenticate to Firestore. "
+    "Set the GOOGLE_APPLICATION_CREDENTIALS environment variable to a valid "
+    "service-account JSON file, ensure that file is mounted into the container "
+    "(see docker-compose.yml), and set GCP_PROJECT_ID."
+)
+_CONNECTION_MESSAGE = (
+    "The dashboard could not reach Firestore. Check the network connection, "
+    "the Firestore emulator host (if used), and the GCP project configuration."
+)
+
+
+def _firestore_error_page(message: str, exc: Exception) -> HTMLResponse:
+    """Render the Firestore error as a themed HTML page (HTTP 503)."""
+    logger.error(
+        "Firestore error rendering dashboard error page: %r", exc, exc_info=exc
+    )
+    parts = page(H1("Dashboard Unavailable"), alert(message, "error"), title="Error")
+    body = "".join(to_xml(part) for part in parts)
+    return HTMLResponse(body, status_code=503)
+
+
+def firestore_exception_handler(request: Request, exc: Exception) -> HTMLResponse:
+    """Starlette exception handler for Firestore auth/connection failures."""
+    if isinstance(exc, _CREDENTIAL_ERRORS):
+        return _firestore_error_page(_CREDENTIAL_MESSAGE, exc)
+    return _firestore_error_page(_CONNECTION_MESSAGE, exc)
+
+
+for _exc_cls in (*_CREDENTIAL_ERRORS, *_CONNECTION_ERRORS):
+    app.add_exception_handler(_exc_cls, firestore_exception_handler)
 
 
 # ---------- Login / logout routes ----------
