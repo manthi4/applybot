@@ -5,13 +5,6 @@ The dashboard triggers the deployed ``applybot-application-preparer`` Cloud
 Function over HTTP, passing an OIDC identity token so the function's invoker
 IAM authorizes the call (the Cloud Run service account holds
 ``roles/cloudfunctions.invoker`` on the function).
-
-Local development: point ``APPLICATION_PREPARER_FUNCTION_URL`` at a locally
-running ``functions-framework`` instance (or the deployed function). An unset
-URL is a hard error — there is no in-process fallback, by design.
-
-This mirrors ``services/discovery.py``; the dashboard must not import the
-``application`` pipeline directly.
 """
 
 from __future__ import annotations

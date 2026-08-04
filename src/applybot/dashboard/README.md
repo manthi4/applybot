@@ -108,6 +108,22 @@ applybot serve --host 0.0.0.0  # bind all interfaces
 ```
 Equivalent: `python -m applybot.dashboard.frontend`.
 
+**Cloud Function URLs (local dev):** The "Run Discovery Now" and "Build
+Approved Applications" buttons trigger Cloud Functions over HTTP via
+`services/discovery.py` and `services/application.py`. Both require their
+function URL to be set:
+
+- `DISCOVERY_FUNCTION_URL` — the `applybot-discovery` Cloud Function.
+- `APPLICATION_PREPARER_FUNCTION_URL` — the `applybot-application-preparer`
+  Cloud Function.
+
+For local development, point either at a locally running `functions-framework`
+instance (or the deployed function URL). An unset URL is a hard error — there
+is no in-process fallback, by design. The call is authenticated with an OIDC
+identity token fetched via Application Default Credentials (`gcloud auth
+application-default login` locally); the Cloud Run service account holds
+`roles/cloudfunctions.invoker` on each function in production.
+
 **Docker (matches Cloud Run image):**
 ```bash
 docker build -f src/applybot/dashboard/Dockerfile -t applybot .

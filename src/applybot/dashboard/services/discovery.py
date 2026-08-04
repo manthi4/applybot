@@ -4,10 +4,6 @@ The dashboard triggers the deployed ``applybot-discovery`` Cloud Function over H
 an OIDC identity token so the function's invoker IAM authorizes the call (the
 Cloud Run service account holds ``roles/cloudfunctions.invoker`` on the
 function — see ``infra/cloud_functions.tf``).
-
-Local development: point ``DISCOVERY_FUNCTION_URL`` at a locally running
-``functions-framework`` instance (or the deployed function). An unset URL is a
-hard error — there is no in-process fallback, by design.
 """
 
 from __future__ import annotations
