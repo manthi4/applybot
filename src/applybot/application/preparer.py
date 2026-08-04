@@ -12,7 +12,7 @@ from applybot.application.question_answerer import (
 from applybot.application.resume_tailor import tailor_resume
 from applybot.models.application import Application, ApplicationStatus
 from applybot.models.job import Job, JobStatus
-from applybot.profile.manager import ProfileManager
+from applybot.models.profile import UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +36,7 @@ def prepare_application(
     Returns:
         Tuple of (Application record, list of profile gaps).
     """
-    pm = ProfileManager()
-    profile = pm.get_profile()
+    profile = UserProfile.get()
     if profile is None:
         raise ValueError("No user profile exists. Set up your profile first.")
 

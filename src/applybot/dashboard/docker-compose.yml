@@ -1,0 +1,31 @@
+# Run the ApplyBot dashboard in Docker.
+#
+#   docker compose -f src/applybot/dashboard/docker-compose.yml up --build
+#
+# All configuration is imported from the repo-root .env.local file via
+# `env_file`. No values are hardcoded here — add or change variables in
+# ../../../.env.local and they flow straight into the container's environment.
+# The dashboard config (src/applybot/dashboard/config.py) reads the process
+# environment only (no .env file is loaded inside the container).
+
+services:
+  dashboard:
+    image: applybot-dashboard
+    container_name: applybot-dashboard
+    build:
+      # The Dockerfile copies pyproject.toml + src/ from the repo root.
+      context: ../../..
+      dockerfile: src/applybot/dashboard/Dockerfile
+    env_file:
+      # Relative to this compose file → repo-root .env.local.
+      - ../../../.env.local
+    # Mount the GCP service-account JSON read-only into the container.
+    # Host path is relative to THIS compose file (src/applybot/dashboard/),
+    # so `../../../` climbs to the repo root where service-account.json lives
+    # (alongside .env.local). Keep read-only. The in-container path
+    # /app/service-account.json must match GOOGLE_APPLICATION_CREDENTIALS.
+    volumes:
+      - ../../../service-account.json:/app/service-account.json:ro
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

@@ -24,7 +24,6 @@ from fasthtml.common import (
 from starlette.requests import Request
 from starlette.responses import Response
 
-from applybot.application.resume_tailor import tailor_resume
 from applybot.dashboard.components import (
     alert,
     confirmed_card,
@@ -35,9 +34,8 @@ from applybot.dashboard.components import (
 )
 from applybot.models.application import Application, ApplicationStatus
 from applybot.models.job import Job
-from applybot.profile.manager import ProfileManager
+from applybot.models.profile import UserProfile
 from applybot.storage import download_file
-from applybot.tracking.tracker import InvalidTransitionError, update_status
 
 _TERMINAL = {ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN}
 
@@ -342,17 +340,17 @@ def register(rt: Any) -> None:
     @rt("/apps/{app_id}/approve", methods=["post"])
     def post_approve(app_id: str) -> object:
         try:
-            update_status(app_id, ApplicationStatus.APPROVED)
+            Application.set_status(app_id, ApplicationStatus.APPROVED)
             return confirmed_card("app", app_id, f"Application #{app_id}", "Approved")
-        except (ValueError, InvalidTransitionError) as e:
+        except ValueError as e:
             return alert(str(e), "error")
 
     @rt("/apps/{app_id}/withdraw", methods=["post"])
     def post_withdraw(app_id: str) -> object:
         try:
-            update_status(app_id, ApplicationStatus.WITHDRAWN)
+            Application.set_status(app_id, ApplicationStatus.WITHDRAWN)
             return confirmed_card("app", app_id, f"Application #{app_id}", "Withdrawn")
-        except (ValueError, InvalidTransitionError) as e:
+        except ValueError as e:
             return alert(str(e), "error")
 
     # -- Cover-letter save ----------------------------------------------------
@@ -404,10 +402,10 @@ def register(rt: Any) -> None:
         if job is None:
             return alert(f"Job {app.job_id} not found for this application.", "error")
         try:
-            profile = ProfileManager().get_profile()
+            profile = UserProfile.get()
             if profile is None:
                 return alert("No profile found -- cannot re-tailor resume.", "error")
-            new_path = tailor_resume(job, profile)
+            raise NotImplementedError("Re-tailoring is not implemented in this version.")
             Application.update(app_id, tailored_resume_path=str(new_path))
             app.tailored_resume_path = str(new_path)
             return _resume_section(app)

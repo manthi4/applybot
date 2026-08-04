@@ -19,7 +19,6 @@ from fasthtml.common import (
     to_xml,
 )
 
-from applybot.application.preparer import prepare_all_approved
 from applybot.dashboard.components import (
     alert,
     collapsible_text,
@@ -27,6 +26,9 @@ from applybot.dashboard.components import (
     filter_form,
     page,
     status_badge,
+)
+from applybot.dashboard.services.application import (
+    trigger_application_preparation,
 )
 from applybot.models.job import Job, JobStatus
 
@@ -307,25 +309,22 @@ def register(rt: Any) -> None:
         )
 
     @rt("/jobs/build-approved", methods=["post"])
-    def post_build() -> object:
-        """Trigger LLM application preparation for all approved jobs."""
+    async def post_build() -> object:
+        """Trigger the application-preparer Cloud Function for all approved jobs."""
         try:
-            results = prepare_all_approved()
-            n = len(results)
+            result = await trigger_application_preparation()
+            n = result.applications_built
             if n == 0:
                 result_alert = alert("No approved jobs found to build.", "info")
             else:
-                total_gaps = sum(len(gaps) for _, gaps in results)
                 msg = f"Built {n} application{'s' if n != 1 else ''} — now in the review queue."
-                if total_gaps:
-                    msg += f" {total_gaps} profile gap{'s' if total_gaps != 1 else ''} flagged."
+                if result.profile_gaps_flagged:
+                    gaps = result.profile_gaps_flagged
+                    msg += f" {gaps} profile gap{'s' if gaps != 1 else ''} flagged."
                 result_alert = alert(msg, "success")
-        except ValueError as e:
-            logger.exception("Build approved: profile error")
-            result_alert = alert(f"Profile error: {e}", "error")
         except Exception as e:
-            logger.exception("Build approved: unexpected error")
-            result_alert = alert(f"Unexpected error: {str(e)[:150]}", "error")
+            logger.exception("Build approved: application-preparer call failed")
+            result_alert = alert(f"Build failed: {str(e)[:150]}", "error")
 
         # OOB-refresh staging area (approved jobs are now in REVIEWING)
         new_approved = Job.query(status=JobStatus.APPROVED, limit=100)

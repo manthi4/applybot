@@ -34,6 +34,12 @@ htmlcov/
 .env.*
 !.env.example
 
+# GCP credentials — never commit
+service-account.json
+service-account*.json
+credentials*.json
+*-key.json
+
 # Resume / CV files — contain personal data, never commit
 *.pdf
 CV_Resume.*

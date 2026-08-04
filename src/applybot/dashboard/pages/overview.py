@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fasthtml.common import H1, Article, Button, Div, Grid, NotStr, Span, to_xml
+from fasthtml.common import H1, Article, Button, Div, NotStr, Span, to_xml
+from fasthtml.pico import Grid
 
 from applybot.dashboard.components import alert, page, progress_table, stat_card
-from applybot.discovery.orchestrator import run_discovery
+from applybot.dashboard.services.discovery import trigger_discovery
 from applybot.models.application import Application
 from applybot.models.job import Job
 
@@ -93,7 +94,7 @@ def register(rt: Any) -> None:
     @rt("/discover", methods=["post"])
     async def post_discover() -> object:
         try:
-            result = await run_discovery()
+            result = await trigger_discovery()
             msg = (
                 f"Scraped {result.total_scraped}"
                 f" · {result.after_dedup} unique"

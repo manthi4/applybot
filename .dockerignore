@@ -2,7 +2,7 @@
 __pycache__/
 *.pyc
 .git/
-.env
+.env*
 data/
 *.egg-info/
 .mypy_cache/

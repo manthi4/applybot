@@ -85,3 +85,23 @@ class Application(FirestoreModel):
             .stream()
         )
         return [cls.from_doc(doc) for doc in docs]
+
+    @classmethod
+    def set_status(
+        cls, application_id: str, new_status: ApplicationStatus
+    ) -> Application:
+        """Set an application's status directly, stamping ``submitted_at``
+        when the status becomes ``SUBMITTED``.
+
+        Raises ``ValueError`` if the application does not exist.
+        """
+        application = cls.get(application_id)
+        if application is None:
+            raise ValueError(f"Application {application_id} not found")
+        fields: dict[str, Any] = {"status": new_status}
+        if new_status is ApplicationStatus.SUBMITTED:
+            fields["submitted_at"] = datetime.now(UTC)
+        cls.update(application_id, **fields)
+        updated = cls.get(application_id)
+        assert updated is not None
+        return updated

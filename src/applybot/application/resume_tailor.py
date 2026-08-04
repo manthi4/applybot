@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from applybot.llm.client import get_llm
 from applybot.models.job import Job
 from applybot.models.profile import UserProfile
-from applybot.profile.resume import (
+from applybot.application.resume import (
     ResumeData,
     ResumeSection,
     generate_resume,

@@ -3,7 +3,8 @@
 Pydantic data models and Firestore CRUD functions. This is the foundational data layer — all other components depend on these models.
 - **No business logic** — models define data shapes and CRUD only
 - **No direct imports from other applybot modules** — this is a leaf dependency
-- Database connection configured via `settings.gcp_project_id` (falls back to Application Default Credentials)
+- Database connection configured via `GCP_PROJECT_ID` env var (falls back to Application Default Credentials)
+  - uses the env var instead of config.settings so that it can be easily imported. 
 
 ## File Structure
 ```
@@ -165,6 +166,7 @@ All access is via classmethods on the models (no module-level CRUD functions).
 - `Application.get(doc_id)`, `app.save()`, `Application.update(doc_id, **fields)`, `Application.count_by_status()`
 - `Application.query(*, status=None, limit=100) -> list[Application]` — ordered by `created_at` DESC
 - `Application.by_statuses(statuses: list[ApplicationStatus]) -> list[Application]` — `in` filter
+- `Application.set_status(application_id, new_status) -> Application` — set status directly; stamps `submitted_at` when becoming `SUBMITTED`; raises `ValueError` if not found
 - `Application.from_doc` migrates the legacy `"draft"` status to `READY_FOR_REVIEW` on read
 
 **`UserProfile`** (`profile.py`) — standalone `BaseModel` (singleton):
@@ -174,14 +176,8 @@ All access is via classmethods on the models (no module-level CRUD functions).
 - `UserProfile.delete() -> None`
 
 
-### Profile (`profile/`)
+### Resume parsing
 
-**ProfileManager** — CRUD operations for the UserProfile table:
-- `get_profile()`, `get_or_create_profile(name, email)`, `update_profile(**kwargs)`
-- `get_skills()`, `export_profile_json(path)`, `import_profile_json(path)`
+Resume parsing and generation (`parse_resume`, `generate_resume`, `ResumeData`/`ResumeSection`) live in the `application` component — see `applybot.application.resume`.
 
-**Resume** — .docx parsing and generation:
-- `parse_resume(path)` → `ResumeData` (name, contact_info, sections with title + content)
-- `generate_resume(data, template_path, output_path)` → creates tailored .docx preserving template formatting
-
-**Bootstrap flow** (planned): On first run, parse existing resume → extract structured profile → store in DB → agent identifies gaps → interactive CLI to fill them in.
+**Bootstrap flow** (planned): On first run, parse existing resume → extract structured profile → store in DB

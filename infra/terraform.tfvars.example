@@ -1,5 +1,8 @@
-project_id        = "your-gcp-project-id"
-region            = "us-central1"
-vertex_region     = "us-east5"
-serpapi_key        = ""
-image_tag         = "latest"
+project_id           = "your-gcp-project-id"
+region               = "us-central1"
+vertex_region        = "us-east5"
+serpapi_key          = ""
+# Generate with: `applybot setup-auth` (prints the secret + otpauth URI).
+# Enter the same secret in your authenticator app AND here.
+dashboard_totp_secret = ""
+image_tag            = "latest"

@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-from applybot.profile.resume import (
+from applybot.application.resume import (
     ResumeData,
     ResumeSection,
     _is_pdf_heading,

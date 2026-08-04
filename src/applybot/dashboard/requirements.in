@@ -1,0 +1,22 @@
+# Runtime dependencies for the `applybot.dashboard` package.
+#
+# Third-party packages actually imported by the modules in this folder
+# (frontend.py, theme.py, components/, pages/, services/). Mirrored here for
+# per-module dependency tracking; the canonical, project-wide list lives in the
+# root pyproject.toml. Keep these versions in sync with pyproject.toml.
+#
+# The dashboard also imports sibling applybot packages (config, models,
+# application, discovery, llm, storage, tracking); their runtime deps are
+# declared in the root pyproject.toml and each module's own requirements.in.
+
+# FastHTML web framework + PicoCSS (frontend, theme, components, pages).
+python-fasthtml>=0.12.0
+
+# ASGI server used by frontend.main() to run the app.
+uvicorn>=0.32.0
+
+# TOTP authentication (frontend.py login flow).
+pyotp>=2.9.0
+
+# .docx resume parsing (services/resume.py).
+python-docx>=1.1.0

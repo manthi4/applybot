@@ -15,14 +15,13 @@ This section is meant to give an outline of each component in the applybot syste
 1. **Discovery Function** — Searches multiple job boards using LLM-generated queries based on the user profile, deduplicates results with fuzzy matching, and uses an llm to rank jobs by relevance to your profile (0-100 score with reasoning). Then saves them into the database.
 2. **Application Preperation Function** — For each approved job, tailors your resume, drafts answers to any present application questions, generates a cover letter, and flags any profile gaps that need human input. Creates an Application record for review.
 3. **Database** - EVERY OTHER COMPONENT OF THIS APP IS STATELESS. The chosen database maintains and tracks the current state of the entire app.
-    * **Profile** - Maintains a structured reference document of the user's skills, experiences, and interests. Essentially a stucured representatoin of their resume with any additional information they provide.
-    * **Job Postings** - Stores all the job postings that have been posted with schema <<>>
-    * **Applications** - Stores all the applications that have been created as well as their current status <<>>
-        * Links each application with the UUID of the job posting it's for.
-        * Applications also have an associated "status" field. Either "review, approved, applied, rejected, or accepted"
+    * **Profile** - Maintains a structured reference document of the user's skills, experiences, and interests. Essentially a structured representation of their resume with any additional information they provide.
+    * **Job Postings** - Stores all discovered job postings (see [Models](src/applybot/models/README.md) for the `Job` schema).
+    * **Applications** - Stores all applications created by the preparation function, each linked to a job posting by its Firestore document ID.
+        * Applications carry a `status` field: `ready_for_review`, `approved`, `submitted`, `received`, `interview`, `offer`, `rejected`, or `withdrawn` (see `ApplicationStatus` in `models/application.py`).
 4. **Dashboard** — Web UI for reviewing and approving discoverd jobs, managing applications, editing profile, and viewing pipeline statistics.
 
-5. **LLM Engine** - Modular API Key based engine to serve the rest of the components. It needs to expose a consistent well documented API surface for the remaining components to access. But under the hood it should allow the user to drop in their own personal LLM service's API Key and URL.
+5. **LLM Engine** - Modular engine exposing a consistent API (text completion, structured output, tool calls) to the rest of the components. Backends are pluggable via `LLM_PROVIDER` — Gemini or Anthropic Claude, both routed through Vertex AI with Google ADC auth (no separate API key).
 
 **Human-in-the-loop**: The agent prepares everything, but never submits without explicit approval. Safety guardrail: the agent never submits without explicit approval.
 
@@ -32,28 +31,29 @@ This section is meant to give an outline of each component in the applybot syste
 
 ```
 applybot/
-├── requirements.txt        #
-├── AGENTS.md               #
 ├── README.md               # This file
+├── AGENTS.md               # Build/test/style conventions
 ├── DEPLOY.md               # Full deployment guide (manual + CI/CD)
-├── pyproject.toml          # Dependencies and tool config
+├── pyproject.toml          # Dependencies and tool config (black, ruff, mypy)
+├── requirements.txt        # Cloud Function deploy manifest (functions-framework + the package)
 ├── data/                   # Local data (resume, exports)
 ├── .github/workflows/
 │   ├── terraform.yml       # Terraform plan/apply CI workflow
 │   └── docker.yml          # Docker build & push CI workflow
-├── infra/                  # Terraform IaC (GCP Cloud Run, GCS data bucket, etc.)
+├── infra/                  # Terraform IaC (Cloud Run, Cloud Functions, Firestore, GCS, secrets)
 ├── src/applybot/
-│   ├── application/        # Applicatio prep functions.
-│   ├── dashboard/          #
-│   ├── discovery/          # Job discovery functions.
-│   ├── llm/                #
+│   ├── application/        # Resume parsing/generation, tailoring, Q&A, cover letters
+│   ├── dashboard/          # FastHTML web UI (pages/, services/, components/, theme)
+│   ├── discovery/          # Job discovery pipeline + scrapers/ + Cloud Function entry point
+│   ├── llm/                # LLM client (Gemini + Anthropic backends via Vertex AI)
 │   ├── models/             # Pydantic models + Firestore CRUD (Job, Application, UserProfile)
+│   ├── cli.py              # `applybot` CLI (serve, setup-auth)
 │   ├── config.py           # Pydantic Settings (env-based)
-└── tests/                  # pytest suite
-
+│   └── storage.py          # GCS storage layer for file storage (resumes, etc.)
+└── tests/                  # Integration test suite
 ```
 
-Each component has its own README describing its purpose, API, and boundaries. It also has its own requirements.in and requirements-dev.in which get compiled into the top level requirements.txt
+Each component directory may carry its own `requirements.in` / `requirements-dev.in` that mirror the root `pyproject.toml`. The root `requirements.txt` is a minimal deploy manifest for the Cloud Functions (functions-framework plus the installed package), not a compiled lockfile.
 
 ---
 
@@ -106,36 +106,7 @@ See [DEPLOY.md](DEPLOY.md) § "CI/CD with GitHub Actions" for full setup instruc
 
 ## Configuration
 
-Pydantic Settings, loading from environment variables or a `.env` file:
-
-```env
-# Required
-GCP_PROJECT_ID=your-gcp-project-id
-SERPAPI_KEY=...
-
-# GCP Project (for Firestore; falls back to ADC)
-GCP_PROJECT_ID=your-gcp-project-id
-
-# Gmail (optional, for tracking)
-GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
-
-# Discovery tuning
-DISCOVERY_RELEVANCE_THRESHOLD=50    # Min relevance score (0-100)
-DISCOVERY_MAX_JOBS_PER_RUN=100
-
-# Application limits
-MAX_APPLICATIONS_PER_DAY=10
-
-# LLM models
-LLM_PROVIDER=gemini                          # gemini (default) or anthropic
-VERTEX_REGION=us-east5                       # Vertex AI region (both providers)
-GEMINI_MODEL_FAST=gemini-2.0-flash           # Cost-efficient tasks
-GEMINI_MODEL_SMART=gemini-2.5-pro            # Complex reasoning
-# To switch to Claude on Vertex AI instead:
-# LLM_PROVIDER=anthropic
-# ANTHROPIC_MODEL_FAST=claude-sonnet-4-6
-# ANTHROPIC_MODEL_SMART=claude-sonnet-4-6
-```
+Pydantic Settings, loading from a `.env` file. See [.env.example](.env.local) for examples
 
 ---
 
@@ -143,7 +114,7 @@ GEMINI_MODEL_SMART=gemini-2.5-pro            # Complex reasoning
 
 ```bash
 # Install (with dev tools and dashboard)
-pip install -e ".[dev,dashboard]"
+pip install -e ".[dev]"
 
 # Initialize database
 python -c "from applybot.models.base import init_db; init_db()"
@@ -158,7 +129,7 @@ pytest
 
 | Decision | Rationale |
 |---|---|
-| Claude via Vertex AI (no LangChain) | Better GCP integration, ADC auth, no separate API key needed |
+| Gemini/Claude via Vertex AI (no LangChain) | Better GCP integration, ADC auth, provider toggle via `LLM_PROVIDER`, no separate API key |
 | Firestore (serverless NoSQL) | No DB server to manage or pay for; generous free tier, scales automatically |
 | Human-in-the-loop | Agent never submits without explicit approval |
 | Resume honesty guardrail | Tailoring can only rephrase/reorder, not fabricate |
@@ -180,9 +151,10 @@ ApplyBot is hosted on **Google Cloud Platform** in a single GCP project (ID conf
 | Service | GCP Product | What it runs | Entry point |
 |---|---|---|---|
 | **Dashboard** | Cloud Run | FastHTML web UI on port 8000 | Docker image from Artifact Registry |
-| **Discovery Pipeline** | Cloud Functions (Gen 2) | Daily job scraping + dedup + ranking | `handle_discovery` in `src/applybot/discovery/main.py` |
+| **Discovery Pipeline** | Cloud Functions (Gen 2) | Job scraping + dedup + ranking | `handle_discovery` in `src/applybot/discovery/main.py` |
+| **Application Preparer** | Cloud Functions (Gen 2) — *not yet deployed in infra* | Resume tailoring + Q&A + cover letters | Triggered by dashboard over HTTP (`APPLICATION_PREPARER_FUNCTION_URL`) |
 
-The dashboard scales 0–1 (serverless, pay-per-use). The discovery function and application preparation are triggered manually via the **"Build Approved Applications"** button on the dashboard.
+The dashboard scales 0–1 (serverless, pay-per-use). Discovery runs on a Cloud Scheduler cron and can also be triggered manually via the **"Run Discovery Now"** button on the dashboard Overview page. Application preparation is triggered manually via the **"Build Approved Applications"** button on the dashboard Job Queue page, which calls the preparer Cloud Function over HTTP.
 
 
 ---
@@ -190,7 +162,7 @@ The dashboard scales 0–1 (serverless, pay-per-use). The discovery function and
 ## Cost Considerations
 
 - **SerpAPI**: ~$50/month for 5,000 searches
-- **Claude via Vertex AI**: Costs depend on usage; billed through GCP; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
+- **Vertex AI LLM calls (Gemini/Claude)**: Costs depend on usage; billed through GCP; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
 - **Greenhouse/Lever APIs**: Free (public)
 - **Firestore**: Free tier (1 GiB storage + 50K reads/day) — essentially free at low usage
 - **GCP Cloud Functions**: Free tier covers light usage

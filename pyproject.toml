@@ -22,6 +22,9 @@ dependencies = [
     "pyotp>=2.9.0",
 ]
 
+[project.scripts]
+applybot = "applybot.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
@@ -48,7 +51,7 @@ plugins = ["pydantic.mypy"]
 disable_error_code = ["misc"]
 
 [[tool.mypy.overrides]]
-module = ["tests.*", "applybot.discovery.tests.*", "applybot.models.tests.*"]
+module = ["tests.*", "applybot.dashboard.tests.*", "applybot.discovery.tests.*", "applybot.models.tests.*"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 
