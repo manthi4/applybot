@@ -12,12 +12,11 @@ This module provides two things:
 from __future__ import annotations
 
 from functools import lru_cache
+from os import environ
 from typing import Any, ClassVar, Self
 
 from google.cloud.firestore_v1 import Client
 from pydantic import BaseModel
-
-from applybot.config import settings
 
 
 @lru_cache(maxsize=1)
@@ -30,17 +29,16 @@ def get_db() -> Client:
     standard Firestore environment:
 
     * ``FIRESTORE_EMULATOR_HOST`` — when set (e.g. ``localhost:8080``) the client
-      targets the local emulator; used by the test suite.
-    * ``GOOGLE_CLOUD_PROJECT`` / ``settings.gcp_project_id`` — the project id
-      passed to the client.
+    * ``GCP_PROJECT_ID`` env var — the project id passed to the client.
     * Otherwise Application Default Credentials are used.
 
     To force re-initialization (e.g. between tests that swap the emulator in
     and out), call ``get_db.cache_clear()``.
     """
     kwargs: dict[str, Any] = {}
-    if settings.gcp_project_id:
-        kwargs["project"] = settings.gcp_project_id
+    project_id = environ.get("GCP_PROJECT_ID")
+    if project_id:
+        kwargs["project"] = project_id
     return Client(**kwargs)
 
 

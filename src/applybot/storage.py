@@ -1,20 +1,17 @@
-"""Thin GCS storage layer with local-filesystem fallback for development."""
+"""Thin GCS storage layer for file storage (resumes, etc.)."""
 
 from __future__ import annotations
 
 import logging
 import mimetypes
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from google.cloud import storage as gcs
 from starlette.responses import Response
 
-from applybot.config import settings
-
 logger = logging.getLogger(__name__)
-
-# Local data directory for fallback (when GCS is not configured)
-_LOCAL_ROOT = Path("data")
 
 # MIME types for common resume formats
 _MIME_TYPES: dict[str, str] = {
@@ -24,42 +21,25 @@ _MIME_TYPES: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# GCS bucket singleton (lazy init, same pattern as models/base.py)
+# GCS bucket singleton (lazy init, same pattern as models/base.py::get_db)
 # ---------------------------------------------------------------------------
-
-_bucket: Any = None
 
 
 def _get_bucket() -> Any:
-    """Return the GCS bucket client singleton (lazy-initialized).
-
-    Only called when ``settings.gcs_bucket_name`` is set.
-    """
-    global _bucket
-    if _bucket is None:
-        from google.cloud import storage as gcs
-
-        kwargs: dict[str, str] = {}
-        if settings.gcp_project_id:
-            kwargs["project"] = settings.gcp_project_id
-        client = gcs.Client(**kwargs)
-        _bucket = client.bucket(settings.gcs_bucket_name)
-        logger.info("GCS bucket initialized: %s", settings.gcs_bucket_name)
-    return _bucket
+    raise NotImplementedError("GCS storage needs rework")
 
 
-def _use_gcs() -> bool:
-    """Return True if GCS is configured."""
-    return bool(settings.gcs_bucket_name)
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+def _guess_content_type(object_name: str) -> str:
+    """Guess MIME type from the object name's extension."""
+    ext = Path(object_name).suffix.lower()
+    if ext in _MIME_TYPES:
+        return _MIME_TYPES[ext]
+    guessed, _ = mimetypes.guess_type(object_name)
+    return guessed or "application/octet-stream"
 
 
 def upload_file(content: bytes, object_name: str) -> str:
-    """Upload bytes to GCS (or write locally in dev).
+    """Upload bytes to GCS.
 
     Args:
         content: File content as bytes.
@@ -68,21 +48,15 @@ def upload_file(content: bytes, object_name: str) -> str:
     Returns:
         The object name (unchanged).
     """
-    if _use_gcs():
-        blob = _get_bucket().blob(object_name)
-        content_type = _guess_content_type(object_name)
-        blob.upload_from_string(content, content_type=content_type)
-        logger.info("Uploaded to GCS: %s (%d bytes)", object_name, len(content))
-    else:
-        local_path = _LOCAL_ROOT / object_name
-        local_path.parent.mkdir(parents=True, exist_ok=True)
-        local_path.write_bytes(content)
-        logger.info("Wrote locally: %s (%d bytes)", local_path, len(content))
+    blob = _get_bucket().blob(object_name)
+    content_type = _guess_content_type(object_name)
+    blob.upload_from_string(content, content_type=content_type)
+    logger.info("Uploaded to GCS: %s (%d bytes)", object_name, len(content))
     return object_name
 
 
 def download_file(object_name: str) -> bytes:
-    """Download from GCS (or read locally in dev).
+    """Download from GCS.
 
     Args:
         object_name: Object path, e.g. ``resumes/resume.pdf``.
@@ -93,20 +67,14 @@ def download_file(object_name: str) -> bytes:
     Raises:
         FileNotFoundError: If the object does not exist.
     """
-    if _use_gcs():
-        blob = _get_bucket().blob(object_name)
-        if not blob.exists():
-            raise FileNotFoundError(f"GCS object not found: {object_name}")
-        return blob.download_as_bytes()  # type: ignore[no-any-return]
-    else:
-        local_path = _LOCAL_ROOT / object_name
-        if not local_path.exists():
-            raise FileNotFoundError(f"Local file not found: {local_path}")
-        return local_path.read_bytes()
+    blob = _get_bucket().blob(object_name)
+    if not blob.exists():
+        raise FileNotFoundError(f"GCS object not found: {object_name}")
+    return blob.download_as_bytes()  # type: ignore[no-any-return]
 
 
 def file_exists(object_name: str) -> bool:
-    """Check whether an object exists in GCS (or locally in dev).
+    """Check whether an object exists in GCS.
 
     Args:
         object_name: Object path, e.g. ``resumes/resume.pdf``.
@@ -114,11 +82,8 @@ def file_exists(object_name: str) -> bool:
     Returns:
         True if the object exists.
     """
-    if _use_gcs():
-        blob = _get_bucket().blob(object_name)
-        return blob.exists()  # type: ignore[no-any-return]
-    else:
-        return (_LOCAL_ROOT / object_name).exists()
+    blob = _get_bucket().blob(object_name)
+    return blob.exists()  # type: ignore[no-any-return]
 
 
 def get_download_response(object_name: str, filename: str) -> Response:
@@ -138,17 +103,3 @@ def get_download_response(object_name: str, filename: str) -> Response:
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _guess_content_type(object_name: str) -> str:
-    """Guess MIME type from the object name's extension."""
-    ext = Path(object_name).suffix.lower()
-    if ext in _MIME_TYPES:
-        return _MIME_TYPES[ext]
-    guessed, _ = mimetypes.guess_type(object_name)
-    return guessed or "application/octet-stream"

@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import re
-import tempfile
-from pathlib import Path
 from typing import Any
 
 from fasthtml.common import (
@@ -31,25 +27,18 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from applybot.dashboard.components import alert, page
-from applybot.dashboard.services.enrichment import (
-    enrich_profile_with_llm_async,
-    extract_raw_resume_text,
+from applybot.dashboard.services.resume_storage import (
+    MAX_RESUME_SIZE,
+    FileTooLargeError,
+    InvalidFileTypeError,
+    ResumeParseError,
+    ResumeStorageError,
+    get_resume_download_response,
+    store_uploaded_resume,
 )
-from applybot.dashboard.services.resume import ResumeData, parse_resume
 from applybot.models.profile import ContactInfo, UserProfile
-from applybot.storage import file_exists, get_download_response, upload_file
 
 logger = logging.getLogger(__name__)
-
-_MAX_RESUME_SIZE = 10 * 1024 * 1024  # 10 MB
-
-_ALLOWED_EXTENSIONS = {".docx", ".pdf", ".md"}
-
-_MIME_TYPES = {
-    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".pdf": "application/pdf",
-    ".md": "text/markdown",
-}
 
 _FLASH_MESSAGES: dict[str, tuple[str, str]] = {
     "basic_saved": ("Basic profile info saved.", "success"),
@@ -123,67 +112,6 @@ def _count_filled(profile: UserProfile) -> int:
         elif val:
             count += 1
     return count
-
-
-def _map_resume_to_profile(parsed: ResumeData, profile: UserProfile) -> None:
-    """Map parsed resume sections to profile fields when they're empty."""
-    resume_dict = parsed.to_dict()
-
-    if not profile.name and resume_dict.get("name"):
-        profile.name = resume_dict["name"]
-    if not profile.summary and resume_dict.get("summary"):
-        profile.summary = resume_dict["summary"]
-
-    # Best-effort: extract email from the raw contact_info string produced by the parser.
-    # The LLM enrichment step will do a more thorough extraction of all contact fields.
-    raw_contact = resume_dict.get("contact_info", "")
-    if raw_contact and not profile.contact_info.email:
-        email_match = re.search(
-            r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", raw_contact
-        )
-        if email_match:
-            profile.contact_info.email = email_match.group(0)
-
-    for section in parsed.sections:
-        heading_lower = section.heading.lower()
-
-        if any(
-            kw in heading_lower
-            for kw in (
-                "skill",
-                "technologies",
-                "tools",
-                "tech stack",
-                "competenc",
-                "language",
-                "programming",
-            )
-        ):
-            if profile.skills is None:
-                profile.skills = {}
-            profile.skills[section.heading] = section.items
-        elif any(
-            kw in heading_lower
-            for kw in ("experience", "employment", "work history", "career")
-        ):
-            new_entries = [
-                {"section": section.heading, "details": item} for item in section.items
-            ]
-            if profile.experiences is None:
-                profile.experiences = new_entries
-            else:
-                profile.experiences.extend(new_entries)
-        elif any(
-            kw in heading_lower
-            for kw in ("education", "academic", "degree", "university", "school")
-        ):
-            new_entries = [
-                {"section": section.heading, "details": item} for item in section.items
-            ]
-            if profile.education is None:
-                profile.education = new_entries
-            else:
-                profile.education.extend(new_entries)
 
 
 def _field(label: str, value: Any) -> Div:
@@ -505,14 +433,10 @@ def register(rt: Any) -> None:  # noqa: C901
     @rt("/profile/resume", methods=["get"])
     def get_resume() -> Response:
         profile = UserProfile.get()
-        object_name = profile.resume_path if profile and profile.resume_path else None
-        if object_name and file_exists(object_name):
-            return get_download_response(object_name, Path(object_name).name)
-        # Legacy fallback: check old local paths for backwards compat
-        for ext in _ALLOWED_EXTENSIONS:
-            legacy_name = f"resumes/resume{ext}"
-            if file_exists(legacy_name):
-                return get_download_response(legacy_name, f"resume{ext}")
+        if profile is not None:
+            response = get_resume_download_response(profile)
+            if response is not None:
+                return response
         return RedirectResponse("/profile?error=no_resume", status_code=303)
 
     @rt("/profile/resume", methods=["post"])
@@ -522,50 +446,28 @@ def register(rt: Any) -> None:  # noqa: C901
         if upload is None or not hasattr(upload, "read"):
             return RedirectResponse("/profile?error=no_file", status_code=303)
 
-        filename: str = getattr(upload, "filename", "") or ""
-        ext = Path(filename).suffix.lower()
-        if ext not in _ALLOWED_EXTENSIONS:
-            return RedirectResponse("/profile?error=invalid_file_type", status_code=303)
-
-        content: bytes = await upload.read(_MAX_RESUME_SIZE + 1)
+        # Cap the read one byte over the limit so the service can detect oversize.
+        content: bytes = await upload.read(MAX_RESUME_SIZE + 1)
         if not content:
             return RedirectResponse("/profile?error=no_file", status_code=303)
-        if len(content) > _MAX_RESUME_SIZE:
-            return RedirectResponse("/profile?error=file_too_large", status_code=303)
 
-        # Upload to GCS (or local fallback)
-        object_name = f"resumes/resume{ext}"
-        upload_file(content, object_name)
+        profile = UserProfile.get()
+        if profile is None:
+            profile = UserProfile(name="")
 
-        # parse_resume / extract_raw_resume_text need a local Path, so use a temp file
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-            tmp.write(content)
-            tmp_path = Path(tmp.name)
         try:
-            try:
-                parsed = parse_resume(tmp_path)
-            except Exception:
-                logger.exception("Failed to parse uploaded resume")
-                return RedirectResponse("/profile?error=parse_failed", status_code=303)
-
-            profile = UserProfile.get()
-            if profile is None:
-                profile = UserProfile(name="")
-
-            profile.resume_path = object_name
-            profile.enrichment_warning = ""
-
-            _map_resume_to_profile(parsed, profile)
-
-            profile.save()
-
-            # Kick off LLM enrichment in the background — won't delay the response.
-            # Raw file text is used (not the heuristic-parsed JSON) so the LLM sees
-            # everything, including sections the keyword matcher may have missed.
-            resume_text = extract_raw_resume_text(tmp_path)
-            asyncio.create_task(enrich_profile_with_llm_async(profile, resume_text))
-        finally:
-            tmp_path.unlink(missing_ok=True)
+            store_uploaded_resume(
+                content, getattr(upload, "filename", "") or "", profile
+            )
+        except InvalidFileTypeError:
+            return RedirectResponse("/profile?error=invalid_file_type", status_code=303)
+        except FileTooLargeError:
+            return RedirectResponse("/profile?error=file_too_large", status_code=303)
+        except ResumeParseError:
+            return RedirectResponse("/profile?error=parse_failed", status_code=303)
+        except ResumeStorageError:
+            logger.exception("Unexpected resume storage failure")
+            return RedirectResponse("/profile?error=parse_failed", status_code=303)
 
         return RedirectResponse("/profile?msg=resume_uploaded", status_code=303)
 

@@ -64,7 +64,7 @@ The frontend uses a modular architecture:
 4. **Profile** (`/profile`) — Full profile editor with multiple sections:
    - **Basic Information**: Edits name + summary only (`POST /profile`).
    - **Contact Information**: Separate section editing email, LinkedIn, phone, GitHub (`POST /profile/contact`). Email is no longer under Basic Info.
-   - **Resume upload**: Upload `.docx`, `.pdf`, or `.md` (max 10 MB) — auto-parsed with `parse_resume()` (`services/resume.py`), stored via the `applybot.storage` layer as object `resumes/resume.<ext>` (GCS in production when `GCS_BUCKET_NAME` is set, local `data/` fallback in dev); `profile.resume_path` holds the object name. Heuristic parse backfills empty name/summary and extracts an email; `_map_resume_to_profile()` maps resume sections to profile fields by keyword. **Parsing is heuristic-only (no LLM).** After the heuristic save, a fire-and-forget background task (`services/enrichment.py`) asks the LLM to enrich the profile. PDF support requires a text-based PDF (scanned PDFs won't work).
+   - **Resume upload**: Upload `.docx`, `.pdf`, or `.md` (max 10 MB) — auto-parsed with `parse_resume()` (`services/resume.py`), stored via the `applybot.storage` layer as GCS object `resumes/resume.<ext>` (requires `GCS_BUCKET_NAME`); `profile.resume_path` holds the object name. Heuristic parse backfills empty name/summary and extracts an email; `_map_resume_to_profile()` maps resume sections to profile fields by keyword. **Parsing is heuristic-only (no LLM).** After the heuristic save, a fire-and-forget background task (`services/enrichment.py`) asks the LLM to enrich the profile. PDF support requires a text-based PDF (scanned PDFs won't work).
    - **Resume download**: `GET /profile/resume` — serves the stored resume via `get_download_response()` from `applybot.storage` (format preserved: `.docx`, `.pdf`, or `.md`).
    - **Skills / Experience / Education / Preferences**: Structured display + collapsible edit forms (`Details`/`Summary`) with JSON textarea editors and schema placeholder examples
    - **Raw JSON**: Collapsible full profile JSON view
@@ -101,12 +101,6 @@ Both sides must hold the identical secret — TOTP is symmetric. If `DASHBOARD_T
 ### Running the Dashboard
 
 **Local development:**
-```bash
-applybot serve                 # http://127.0.0.1:8000 (reads PORT env / settings.port)
-applybot serve --reload        # auto-reload on code changes
-applybot serve --host 0.0.0.0  # bind all interfaces
-```
-Equivalent: `python -m applybot.dashboard.frontend`.
 
 **Cloud Function URLs (local dev):** The "Run Discovery Now" and "Build
 Approved Applications" buttons trigger Cloud Functions over HTTP via
@@ -124,17 +118,14 @@ identity token fetched via Application Default Credentials (`gcloud auth
 application-default login` locally); the Cloud Run service account holds
 `roles/cloudfunctions.invoker` on each function in production.
 
-**Docker (matches Cloud Run image):**
-```bash
-docker build -f src/applybot/dashboard/Dockerfile -t applybot .
-docker run -p 8000:8000 applybot   # serves on 0.0.0.0:8000 via `python -m applybot.dashboard.frontend`
-```
-
-**Docker Compose (env-only — no .env loaded):** `docker-compose.yml` builds the
-Dockerfile and injects every setting as a real environment variable. Export the
-vars you need (see the file header), then:
+**Docker Compose (like cloud run):** `docker-compose.yml` builds the
+Dockerfile and injects every setting as a real environment variable.
 ```bash
 docker compose -f src/applybot/dashboard/docker-compose.yml up --build
+```
+To spin it down you may have to run
+```bash
+docker compose -f src/applybot/dashboard/docker-compose.yml down
 ```
 
 Place your GCP service-account JSON at the repo root as `service-account.json`
@@ -146,7 +137,7 @@ Place your GCP service-account JSON at the repo root as `service-account.json`
 
 ## Boundaries
 
-- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret + port + discovery function URL + application-preparer function URL), `application` (Build Approved Applications button triggers the `applybot-application-preparer` Cloud Function over HTTP via `services/application.py` — no direct import of the pipeline), `discovery` (Run Discovery button triggers the `applybot-discovery` Cloud Function over HTTP via `services/discovery.py` — no direct import of the pipeline), `llm` (profile enrichment after resume upload, via `services/enrichment.py`), `storage` (resume upload/download via GCS-with-local-fallback layer)
+- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret + port + discovery function URL + application-preparer function URL), `application` (Build Approved Applications button triggers the `applybot-application-preparer` Cloud Function over HTTP via `services/application.py` — no direct import of the pipeline), `discovery` (Run Discovery button triggers the `applybot-discovery` Cloud Function over HTTP via `services/discovery.py` — no direct import of the pipeline), `llm` (profile enrichment after resume upload, via `services/enrichment.py`), `storage` (resume upload/download via GCS layer)
 
 ## Cloud Deployment
 
@@ -168,6 +159,6 @@ Cloud Run env vars (see `infra/cloud_run.tf`):
 - `SERPAPI_KEY` (Secret Manager) — job scraping
 - `DASHBOARD_TOTP_SECRET` (Secret Manager) — dashboard auth
 - `DISCOVERY_FUNCTION_URL` (plain) — URL of the `applybot-discovery` Cloud Function, invoked over HTTP with an OIDC identity token (the Cloud Run service account holds `roles/cloudfunctions.invoker` on the function)
-- `APPLICATION_PREPARER_FUNCTION_URL` (plain) — URL of the `applybot-application-preparer` Cloud Function, invoked over HTTP with an OIDC identity token (the Cloud Run service account holds `roles/cloudfunctions.invoker` on the function). **Note:** only `applybot-discovery` is currently deployed in `infra/cloud_functions.tf`; the application-preparer Cloud Function entry point is not yet wired into Terraform, so the "Build Approved Applications" button will fail until it is deployed (or pointed at a local `functions-framework` instance).
+- `APPLICATION_PREPARER_FUNCTION_URL` (plain) — URL of the `applybot-application-preparer` Cloud Function, invoked over HTTP with an OIDC identity token (the Cloud Run service account holds `roles/cloudfunctions.invoker` on the function).
 
-Auth to GCP services is via the Cloud Run service account (ADC), not a credentials file. The service account has: `roles/datastore.user` (Firestore), `roles/secretmanager.secretAccessor`, `roles/aiplatform.user` (Vertex AI), and `roles/storage.objectAdmin` (GCS).
+Auth to GCP services is via the Cloud Run service account (ADC), uses a credentials file when running locally. Check [cloud-run.tf](infra/cloud_run.tf) for details about the service account.

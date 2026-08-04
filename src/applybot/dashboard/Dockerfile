@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install .
 
 # 3. Copy actual application source code
-COPY src/applybot/__init__.py src/applybot/config.py src/applybot/storage.py src/applybot/
+COPY src/applybot/__init__.py src/applybot/storage.py src/applybot/
 COPY src/applybot/models src/applybot/models
 COPY src/applybot/llm src/applybot/llm
 COPY src/applybot/dashboard src/applybot/dashboard

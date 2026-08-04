@@ -3,7 +3,8 @@
 Pydantic data models and Firestore CRUD functions. This is the foundational data layer — all other components depend on these models.
 - **No business logic** — models define data shapes and CRUD only
 - **No direct imports from other applybot modules** — this is a leaf dependency
-- Database connection configured via `settings.gcp_project_id` (falls back to Application Default Credentials)
+- Database connection configured via `GCP_PROJECT_ID` env var (falls back to Application Default Credentials)
+  - uses the env var instead of config.settings so that it can be easily imported. 
 
 ## File Structure
 ```

@@ -49,7 +49,7 @@ applybot/
 │   ├── models/             # Pydantic models + Firestore CRUD (Job, Application, UserProfile)
 │   ├── cli.py              # `applybot` CLI (serve, setup-auth)
 │   ├── config.py           # Pydantic Settings (env-based)
-│   └── storage.py          # GCS storage layer with local-filesystem fallback
+│   └── storage.py          # GCS storage layer for file storage (resumes, etc.)
 └── tests/                  # Integration test suite
 ```
 
