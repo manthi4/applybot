@@ -6,5 +6,3 @@ serpapi_key          = ""
 # Enter the same secret in your authenticator app AND here.
 dashboard_totp_secret = ""
 image_tag            = "latest"
-# URL of the application-preparer Cloud Function (leave empty until deployed).
-application_preparer_function_url = ""
