@@ -48,8 +48,12 @@ Run `pre-commit install` once to enable automatic checks on every commit.
 
 - **Commit format**: [Conventional Commits](https://www.conventionalcommits.org/) — `type(scope): message`.
   - Types: `feat`, `fix`, `docs`, `ci`, `chore`, `infra`, `refactor`.
-  - Scopes: `dashboard`, `discovery`, `profile`, `llm`, `models`, `tracking` — omit if change spans multiple areas.
+  - Scopes: `dashboard`, `discovery`, `llm`, `models`, `tracking` — omit if change spans multiple areas.
   - Examples: `feat(dashboard): add Run Discovery button`, `fix: increase max_tokens to prevent JSON truncation`.
 - **PR descriptions**: describe what changed and why; link issues when applicable.
 - **CI triggers**: append `--tf-apply` or `--docker` to commit messages to trigger Terraform or Docker workflows on push to `main`.
 - Make sure to talk to the user in english
+
+## Virtual Environment (CRITICAL)
+**ALWAYS verify the virtual environment is active before running ANY Python or pip command.** Installing packages into the system Python is destructive and unwanted.
+

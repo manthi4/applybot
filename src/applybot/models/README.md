@@ -175,10 +175,8 @@ All access is via classmethods on the models (no module-level CRUD functions).
 - `UserProfile.delete() -> None`
 
 
-### Profile (`profile/`)
+### Resume parsing
 
-**Resume** — .docx parsing and generation:
-- `parse_resume(path)` → `ResumeData` (name, contact_info, sections with title + content)
-- `generate_resume(data, template_path, output_path)` → creates tailored .docx preserving template formatting
+Resume parsing and generation (`parse_resume`, `generate_resume`, `ResumeData`/`ResumeSection`) live in the `application` component — see `applybot.application.resume`.
 
 **Bootstrap flow** (planned): On first run, parse existing resume → extract structured profile → store in DB

@@ -23,12 +23,13 @@ dashboard/
 │   ├── __init__.py
 │   ├── resume.py          # parse_resume() / ResumeData — heuristic resume parser
 │   ├── enrichment.py      # fire-and-forget LLM profile enrichment after upload
-│   └── discovery.py       # trigger_discovery() — HTTP client for the discovery Cloud Function
+│   ├── discovery.py       # trigger_discovery() — HTTP client for the discovery Cloud Function
+│   └── application.py     # trigger_application_preparation() — HTTP client for the application-preparer Cloud Function
 ├── pages/
 │   ├── __init__.py
 │   ├── overview.py   # Overview page — stats cards and pipeline progress
-│   ├── jobs.py       # Job queue — list, filter, approve, skip
-│   ├── apps.py       # Applications — list, filter, approve, draft
+│   ├── jobs.py       # Job queue — staging area, build-approved, list, filter, approve, skip
+│   ├── apps.py       # Applications — list, filter, approve, withdraw, edit cover letter/answers, re-tailor resume
 │   └── profile.py    # Profile — view and edit user profile
 └── README.md
 ```
@@ -56,10 +57,10 @@ The frontend uses a modular architecture:
 ### Pages
 
 1. **Overview** (`/`) — Stats cards, pipeline progress bars, application status breakdown, plus a **"Run Discovery Now"** button (`POST /discover`) that triggers the `applybot-discovery` Cloud Function over HTTP (via `services/discovery.py`) with a loading spinner. Requires `DISCOVERY_FUNCTION_URL` to be set.
-2. **Job Queue** (`/jobs`) — Two-section layout:
-   - **Staging Area** — Always-visible panel showing approved jobs queued for application generation, with a **"Build Approved Applications"** button that triggers `prepare_all_approved()` via HTMX. Shows a loading spinner during the (potentially slow) LLM call.
+2. **Job Queue** (`/jobs`) — Approved jobs queued for application generation, plus a filterable browse list.
+   - **Staging Area** — Panel showing approved jobs queued for application generation, with a **"Build Approved Applications"** button (`POST /jobs/build-approved`) that triggers the `applybot-application-preparer` Cloud Function over HTTP (via `services/application.py`) with a loading spinner during the (potentially slow) LLM call. Requires `APPLICATION_PREPARER_FUNCTION_URL` to be set. An **"Unstage All"** button (`POST /jobs/unstage-all`) returns all approved jobs to NEW.
    - **Browse Jobs** — Filterable job list (defaults to NEW) with HTMX-powered approve/skip actions. Compact inline approve/skip buttons sit on the right side of each job tile header. Approving or skipping a job uses OOB swaps to refresh both the staging area and the browse list in one response.
-3. **Applications** (`/apps`) — Applications by status with cover letter, answers, and review actions
+3. **Applications** (`/apps`) — Applications by status with inline editing: edit the cover letter and Q&A answers, re-tailor the resume, download the tailored resume, and approve/withdraw. Terminal statuses (rejected/withdrawn) render read-only.
 4. **Profile** (`/profile`) — Full profile editor with multiple sections:
    - **Basic Information**: Edits name + summary only (`POST /profile`).
    - **Contact Information**: Separate section editing email, LinkedIn, phone, GitHub (`POST /profile/contact`). Email is no longer under Basic Info.
@@ -120,11 +121,16 @@ vars you need (see the file header), then:
 docker compose -f src/applybot/dashboard/docker-compose.yml up --build
 ```
 
+Place your GCP service-account JSON at the repo root as `service-account.json`
+(or change the host path in `docker-compose.yml`). It is mounted read-only at
+`/app/service-account.json` inside the container, which is what
+`GOOGLE_APPLICATION_CREDENTIALS` should point to.
+
 **Cloud Run:** pushes to Cloud Run on every commit to `main` whose message contains `--docker` (workflow `.github/workflows/docker.yml`). The image is built from the repo root with the dashboard Dockerfile, pushed to Artifact Registry, and deployed via `gcloud run deploy applybot`.
 
 ## Boundaries
 
-- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret + port + discovery function URL), `application` (Build Approved Applications button via `prepare_all_approved`), `discovery` (Run Discovery button triggers the `applybot-discovery` Cloud Function over HTTP via `services/discovery.py` — no direct import of the pipeline), `llm` (profile enrichment after resume upload, via `services/enrichment.py`), `storage` (resume upload/download via GCS-with-local-fallback layer)
+- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret + port + discovery function URL + application-preparer function URL), `application` (Build Approved Applications button triggers the `applybot-application-preparer` Cloud Function over HTTP via `services/application.py` — no direct import of the pipeline), `discovery` (Run Discovery button triggers the `applybot-discovery` Cloud Function over HTTP via `services/discovery.py` — no direct import of the pipeline), `llm` (profile enrichment after resume upload, via `services/enrichment.py`), `storage` (resume upload/download via GCS-with-local-fallback layer)
 
 ## Cloud Deployment
 
@@ -146,5 +152,6 @@ Cloud Run env vars (see `infra/cloud_run.tf`):
 - `SERPAPI_KEY` (Secret Manager) — job scraping
 - `DASHBOARD_TOTP_SECRET` (Secret Manager) — dashboard auth
 - `DISCOVERY_FUNCTION_URL` (plain) — URL of the `applybot-discovery` Cloud Function, invoked over HTTP with an OIDC identity token (the Cloud Run service account holds `roles/cloudfunctions.invoker` on the function)
+- `APPLICATION_PREPARER_FUNCTION_URL` (plain) — URL of the `applybot-application-preparer` Cloud Function, invoked over HTTP with an OIDC identity token (the Cloud Run service account holds `roles/cloudfunctions.invoker` on the function). **Note:** only `applybot-discovery` is currently deployed in `infra/cloud_functions.tf`; the application-preparer Cloud Function entry point is not yet wired into Terraform, so the "Build Approved Applications" button will fail until it is deployed (or pointed at a local `functions-framework` instance).
 
 Auth to GCP services is via the Cloud Run service account (ADC), not a credentials file. The service account has: `roles/datastore.user` (Firestore), `roles/secretmanager.secretAccessor`, `roles/aiplatform.user` (Vertex AI), and `roles/storage.objectAdmin` (GCS).
