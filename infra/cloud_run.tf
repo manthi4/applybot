@@ -74,6 +74,10 @@ resource "google_cloud_run_v2_service" "applybot" {
         name  = "DISCOVERY_FUNCTION_URL"
         value = google_cloudfunctions2_function.discovery.url
       }
+      # env {
+      #   name  = "APPLICATION_PREPARER_FUNCTION_URL"
+      #   value = google_cloudfunctions2_function.preparer.url
+      # }
 
       dynamic "env" {
         for_each = var.serpapi_key != "" ? [1] : []
