@@ -18,5 +18,5 @@ uvicorn>=0.32.0
 # TOTP authentication (frontend.py login flow).
 pyotp>=2.9.0
 
-# .docx resume parsing (services/resume.py).
+# .docx resume parsing (services/resume_to_profile.py).
 python-docx>=1.1.0

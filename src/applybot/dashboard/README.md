@@ -21,8 +21,7 @@ dashboard/
 │   └── cards.py           # detail_card(), action_buttons(), confirmed_card(), collapsible_text()
 ├── services/         # Dashboard-local domain logic + HTTP clients for other services
 │   ├── __init__.py
-│   ├── resume.py          # parse_resume() / ResumeData — heuristic resume parser
-│   ├── enrichment.py      # fire-and-forget LLM profile enrichment after upload
+│   ├── resume_to_profile.py  # resume_to_profile() — resume → profile (blocking LLM);
 │   ├── discovery.py       # trigger_discovery() — HTTP client for the discovery Cloud Function
 │   └── application.py     # trigger_application_preparation() — HTTP client for the application-preparer Cloud Function
 ├── pages/
@@ -64,7 +63,7 @@ The frontend uses a modular architecture:
 4. **Profile** (`/profile`) — Full profile editor with multiple sections:
    - **Basic Information**: Edits name + summary only (`POST /profile`).
    - **Contact Information**: Separate section editing email, LinkedIn, phone, GitHub (`POST /profile/contact`). Email is no longer under Basic Info.
-   - **Resume upload**: Upload `.docx`, `.pdf`, or `.md` (max 10 MB) — auto-parsed with `parse_resume()` (`services/resume.py`), stored via the `applybot.storage` layer as GCS object `resumes/resume.<ext>` (requires `GCS_BUCKET_NAME`); `profile.resume_path` holds the object name. Heuristic parse backfills empty name/summary and extracts an email; `_map_resume_to_profile()` maps resume sections to profile fields by keyword. **Parsing is heuristic-only (no LLM).** After the heuristic save, a fire-and-forget background task (`services/enrichment.py`) asks the LLM to enrich the profile. PDF support requires a text-based PDF (scanned PDFs won't work).
+   - **Resume upload**: Upload `.docx`, `.pdf`, or `.md` (max 10 MB) — the profile page orchestrates two independent services: `resume_storage.store_uploaded_resume()` validates/stores the file via the `applybot.storage` layer as GCS object `resumes/resume.<ext>` (requires `GCS_BUCKET_NAME`) and returns the object name (it does not touch the profile model), then `resume_to_profile.resume_to_profile()` (`services/resume_to_profile.py`, blocking LLM call) enriches the profile from the extracted resume text. The page records `resume_path` and persists the profile itself. The two services share no profile-model dependency. The heuristic `parse_resume()` / `_map_resume_to_profile()` utilities live in `resume_to_profile` for structured extraction. PDF support requires a text-based PDF (scanned PDFs won't work).
    - **Resume download**: `GET /profile/resume` — serves the stored resume via `get_download_response()` from `applybot.storage` (format preserved: `.docx`, `.pdf`, or `.md`).
    - **Skills / Experience / Education / Preferences**: Structured display + collapsible edit forms (`Details`/`Summary`) with JSON textarea editors and schema placeholder examples
    - **Raw JSON**: Collapsible full profile JSON view
@@ -137,7 +136,7 @@ Place your GCP service-account JSON at the repo root as `service-account.json`
 
 ## Boundaries
 
-- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret + port + discovery function URL + application-preparer function URL), `application` (Build Approved Applications button triggers the `applybot-application-preparer` Cloud Function over HTTP via `services/application.py` — no direct import of the pipeline), `discovery` (Run Discovery button triggers the `applybot-discovery` Cloud Function over HTTP via `services/discovery.py` — no direct import of the pipeline), `llm` (profile enrichment after resume upload, via `services/enrichment.py`), `storage` (resume upload/download via GCS layer)
+- **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret + port + discovery function URL + application-preparer function URL), `application` (Build Approved Applications button triggers the `applybot-application-preparer` Cloud Function over HTTP via `services/application.py` — no direct import of the pipeline), `discovery` (Run Discovery button triggers the `applybot-discovery` Cloud Function over HTTP via `services/discovery.py` — no direct import of the pipeline), `llm` (profile enrichment after resume upload, via `services/resume_to_profile.py`), `storage` (resume upload/download via GCS layer)
 
 ## Cloud Deployment
 
