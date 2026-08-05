@@ -9,10 +9,29 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "vertex_region" {
-  description = "Vertex AI region for LLM access — used by both Gemini (google-genai SDK) and Anthropic Claude (anthropic Vertex SDK). Use a specific region like us-east5, us-central1, europe-west1."
+variable "llm_model_fast" {
+  description = "litellm model string for the 'fast' tier. The prefix selects the provider (gpt-* = OpenAI, claude-* = Anthropic, gemini/* = Google)."
   type        = string
-  default     = "us-east5"
+  default     = "gpt-4o-mini"
+}
+
+variable "llm_model_smart" {
+  description = "litellm model string for the 'smart' tier. The prefix selects the provider."
+  type        = string
+  default     = "gpt-4o"
+}
+
+variable "llm_api_key" {
+  description = "API key for the configured LLM provider. Injected under the env var named by llm_api_key_env_name (e.g. OPENAI_API_KEY)."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "llm_api_key_env_name" {
+  description = "Env var name litellm expects the provider API key under: OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY."
+  type        = string
+  default     = "OPENAI_API_KEY"
 }
 
 variable "serpapi_key" {

@@ -1,10 +1,14 @@
 # LLM
 
-Multi-provider LLM wrapper supporting Google Gemini and Anthropic Claude. Provides three call patterns and a module-level singleton.
+Provider-agnostic LLM client backed by [litellm](https://github.com/BerriAI/litellm).
+litellm exposes a single `completion` API across providers (OpenAI, Anthropic,
+Google Gemini, …), so swapping the underlying model is a config change, not a
+code change — no vendor lock-in.
 
 ## Files
 
-- **client.py** — `LLMClient` abstract base class, `GeminiClient`, `AnthropicClient`, and `get_llm()` lazy singleton accessor
+- **config.py** — `LLMSettings` (env-sourced model + retry settings)
+- **client.py** — `LLMClient` and the `get_llm()` lazy singleton accessor
 
 ## Public API
 
@@ -19,38 +23,49 @@ response: str = get_llm().complete(prompt, system="...", tier="smart")
 
 # Structured output parsed to a Pydantic model
 result: MyModel = get_llm().structured_output(prompt, output_type=MyModel, system="...", tier="smart")
-
-# Tool-use call — AnthropicClient only
-message = get_llm().with_tools(prompt, tools=[...], system="...")
 ```
 
-### Configuration
+Callers select model quality via the `tier` keyword argument (`"fast"` or
+`"smart"`, default `"fast"`). Each tier resolves to a configured litellm model
+string — consumers never reference model strings directly.
 
-The active backend is set by `settings.llm_provider` (env var `LLM_PROVIDER`):
+## Configuration
 
-| Provider | Value | Auth |
+All settings use the `LLM_` env prefix:
+
+| Env var | Default | Purpose |
 |---|---|---|
-| Google Gemini (default) | `"gemini"` | Google ADC (service account) |
-| Anthropic Claude on Vertex | `"anthropic"` | Google ADC (service account) |
+| `LLM_MODEL_FAST` | `gpt-4o-mini` | litellm model string for `tier="fast"` |
+| `LLM_MODEL_SMART` | `gpt-4o` | litellm model string for `tier="smart"` |
+| `LLM_MAX_RETRIES` | `3` | litellm retries on transient provider failures |
 
-Callers select model quality via the `tier` keyword argument (`"fast"` or `"smart"`, default `"fast"`). Each provider resolves the tier to its own configured model name — consumers never reference model strings directly.
+The **provider** is selected by the model string prefix (litellm convention):
 
-**Gemini settings** (env vars):
-- `LLM_PROVIDER=gemini` (default)
-- `GCP_PROJECT_ID`, `VERTEX_REGION` — Google Cloud project and Vertex AI region
-- `GEMINI_MODEL_FAST` — default `gemini-2.0-flash`
-- `GEMINI_MODEL_SMART` — default `gemini-2.5-pro`
-- Uses the `google-genai` SDK (`google-genai>=1.0.0`) with Vertex AI
+| Prefix / example | Provider | API key env var |
+|---|---|---|
+| `gpt-4o`, `gpt-4o-mini` | OpenAI | `OPENAI_API_KEY` |
+| `claude-3-5-sonnet-20241022` | Anthropic | `ANTHROPIC_API_KEY` |
+| `gemini/gemini-2.0-flash` | Google Gemini | `GEMINI_API_KEY` |
 
-**Anthropic/Claude settings** (env vars):
-- `LLM_PROVIDER=anthropic`
-- `GCP_PROJECT_ID`, `VERTEX_REGION` — Google Cloud project and Vertex AI region
-- `ANTHROPIC_MODEL_FAST`, `ANTHROPIC_MODEL_SMART` — default `claude-sonnet-4-6`
-- `ANTHROPIC_MAX_RETRIES` — default `3`
+litellm reads each provider's API key from its standard environment variable
+automatically — set the one(s) for the provider(s) you use.
+
+### Example
+
+```bash
+# OpenAI
+LLM_MODEL_FAST=gpt-4o-mini
+LLM_MODEL_SMART=gpt-4o
+OPENAI_API_KEY=sk-...
+
+# Or Anthropic
+LLM_MODEL_FAST=claude-3-5-haiku-20241022
+LLM_MODEL_SMART=claude-3-5-sonnet-20241022
+ANTHROPIC_API_KEY=sk-ant-...
+```
 
 ## Boundaries
 
-- **Depends on**: `config.py` (for provider selection and model settings)
+- **Depends on**: `litellm`, `config.py` (env-sourced settings)
 - **No knowledge of domain models** — this is a generic LLM utility
-- **Used by**: Query Builder, Ranker, Resume Tailor, Question Answerer, Gmail classifier
-- `with_tools()` is only available with the `"anthropic"` provider
+- **Used by**: Query Builder, Ranker, Resume Tailor, Question Answerer, profile enrichment

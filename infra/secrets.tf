@@ -28,3 +28,19 @@ resource "google_secret_manager_secret_version" "dashboard_totp_secret" {
   secret      = google_secret_manager_secret.dashboard_totp_secret.id
   secret_data = var.dashboard_totp_secret
 }
+
+resource "google_secret_manager_secret" "llm_api_key" {
+  secret_id = "llm-api-key"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.services]
+}
+
+resource "google_secret_manager_secret_version" "llm_api_key" {
+  count       = var.llm_api_key != "" ? 1 : 0
+  secret      = google_secret_manager_secret.llm_api_key.id
+  secret_data = var.llm_api_key
+}

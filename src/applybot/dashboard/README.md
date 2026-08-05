@@ -154,7 +154,8 @@ The FastHTML app (`python -m applybot.dashboard.frontend`) is hosted on **GCP Cl
 
 Cloud Run env vars (see `infra/cloud_run.tf`):
 - `GCP_PROJECT_ID` (plain) — Firestore project
-- `VERTEX_REGION` (plain) — Vertex AI region (Gemini + Anthropic)
+- `LLM_MODEL_FAST` / `LLM_MODEL_SMART` (plain) — litellm model strings; the prefix selects the provider
+- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` (Secret Manager) — API key for the chosen LLM provider, read by litellm
 - `GCS_BUCKET_NAME` (plain) — bucket for resume storage
 - `SERPAPI_KEY` (Secret Manager) — job scraping
 - `DASHBOARD_TOTP_SECRET` (Secret Manager) — dashboard auth

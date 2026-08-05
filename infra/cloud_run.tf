@@ -17,13 +17,6 @@ resource "google_project_iam_member" "cloud_run_secrets" {
   member  = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
-# Vertex AI access for Cloud Run (Claude via Vertex)
-resource "google_project_iam_member" "cloud_run_vertex_ai" {
-  project = var.project_id
-  role    = "roles/aiplatform.user"
-  member  = "serviceAccount:${google_service_account.cloud_run.email}"
-}
-
 # GCS bucket access for Cloud Run
 resource "google_storage_bucket_iam_member" "cloud_run_storage" {
   bucket = google_storage_bucket.data.name
@@ -62,14 +55,33 @@ resource "google_cloud_run_v2_service" "applybot" {
       }
 
       env {
-        name  = "VERTEX_REGION"
-        value = var.vertex_region
+        name  = "LLM_MODEL_FAST"
+        value = var.llm_model_fast
+      }
+
+      env {
+        name  = "LLM_MODEL_SMART"
+        value = var.llm_model_smart
+      }
+
+      dynamic "env" {
+        for_each = var.llm_api_key != "" ? [1] : []
+        content {
+          name = var.llm_api_key_env_name
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.llm_api_key.secret_id
+              version = "latest"
+            }
+          }
+        }
       }
 
       env {
         name  = "GCS_BUCKET_NAME"
         value = google_storage_bucket.data.name
       }
+
       env {
         name  = "DISCOVERY_FUNCTION_URL"
         value = google_cloudfunctions2_function.discovery.url
@@ -131,7 +143,6 @@ resource "google_cloud_run_v2_service" "applybot" {
     google_project_service.services,
     google_project_iam_member.cloud_run_firestore,
     google_project_iam_member.cloud_run_secrets,
-    google_project_iam_member.cloud_run_vertex_ai,
     google_storage_bucket_iam_member.cloud_run_storage,
   ]
 

@@ -62,7 +62,18 @@ resource "google_cloudfunctions2_function" "discovery" {
 
     environment_variables = {
       GCP_PROJECT_ID  = var.project_id
-      VERTEX_REGION   = var.region
+      LLM_MODEL_FAST  = var.llm_model_fast
+      LLM_MODEL_SMART = var.llm_model_smart
+    }
+
+    dynamic "secret_environment_variables" {
+      for_each = var.llm_api_key != "" ? [1] : []
+      content {
+        key        = var.llm_api_key_env_name
+        project_id = var.project_id
+        secret     = google_secret_manager_secret.llm_api_key.secret_id
+        version    = "latest"
+      }
     }
 
     secret_environment_variables {
