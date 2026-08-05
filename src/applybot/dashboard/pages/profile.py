@@ -483,9 +483,13 @@ def register(rt: Any) -> None:  # noqa: C901
             updated_profile = resume_to_profile(tmp_path, profile)
             updated_profile.resume_path = object_name
             updated_profile.save()
-        except (ValueError, ImportError):
-            profile.save()  # preserve the uploaded resume even if parsing fails
-            logger.exception("Failed to parse uploaded resume")
+        except Exception:
+            # Parsing (unsupported format, missing pypdf) or LLM enrichment
+            # (API error, malformed/invalid structured output) can both raise
+            # here. The resume is already in storage either way — persist
+            # resume_path so the upload is never orphaned.
+            profile.save()
+            logger.exception("Failed to enrich profile from uploaded resume")
             return RedirectResponse("/profile?error=parse_failed", status_code=303)
         finally:
             tmp_path.unlink(missing_ok=True)
