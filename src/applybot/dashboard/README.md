@@ -138,6 +138,26 @@ Place your GCP service-account JSON at the repo root as `service-account.json`
 
 - **Depends on**: `models` (Firestore CRUD), `config` (GCP project + TOTP secret + port + discovery function URL + application-preparer function URL), `application` (Build Approved Applications button triggers the `applybot-application-preparer` Cloud Function over HTTP via `services/application.py` — no direct import of the pipeline), `discovery` (Run Discovery button triggers the `applybot-discovery` Cloud Function over HTTP via `services/discovery.py` — no direct import of the pipeline), `llm` (profile enrichment after resume upload, via `services/resume_to_profile.py`), `storage` (resume upload/download via GCS layer)
 
+### LLM keys & model (near-real-time updates)
+
+The dashboard is the surface where users update LLM provider keys and the
+default model on the fly (`applybot.llm.client.update_provider` /
+`delete_provider` / `set_default_model`). Those calls write to GCP Secret
+Manager (keys) and Firestore (`config/llm.default_model`); the store layer's
+TTL cache propagates changes across services within seconds.
+
+**Infra wiring (done):** the Cloud Run service account has scoped
+`roles/secretmanager.secretAccessor` (read) and `roles/secretmanager.secretVersionAdder`
+(write) on the per-provider secrets (`openai-api-key`, `anthropic-api-key`,
+`gemini-api-key`); LLM keys are no longer bound via `secret_key_ref` env vars
+(those resolve only at cold-start). See `infra/cloud_run.tf` / `infra/secrets.tf`.
+
+**TODO (code):** expose dashboard endpoints that call `update_provider` /
+`delete_provider` / `set_default_model` behind the existing TOTP auth. The
+default model has no env-var fallback — it lives only in the Firestore
+`config/llm.default_model` doc, so a fresh deploy needs one
+`set_default_model()` call before LLM completions work.
+
 ## Cloud Deployment
 
 ### Dashboard → Cloud Run
@@ -152,9 +172,8 @@ The FastHTML app (`python -m applybot.dashboard.frontend`) is hosted on **GCP Cl
 ### Secrets & environment
 
 Cloud Run env vars (see `infra/cloud_run.tf`):
-- `GCP_PROJECT_ID` (plain) — Firestore project
-- `LLM_MODEL_FAST` / `LLM_MODEL_SMART` (plain) — litellm model strings; the prefix selects the provider
-- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` (Secret Manager) — API key for the chosen LLM provider, read by litellm
+- `GCP_PROJECT_ID` (plain) — GCP project; activates the `llm` store layer (Secret Manager + Firestore)
+- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` — provider API keys, read live from Secret Manager (`openai-api-key` / `anthropic-api-key` / `gemini-api-key`) by `applybot.llm.client` on each cache miss; not bound via `secret_key_ref`
 - `GCS_BUCKET_NAME` (plain) — bucket for resume storage
 - `SERPAPI_KEY` (Secret Manager) — job scraping
 - `DASHBOARD_TOTP_SECRET` (Secret Manager) — dashboard auth

@@ -7,6 +7,7 @@ dependencies = [
     "litellm>=1.50.0",
     "uvicorn>=0.32.0",
     "google-cloud-firestore>=2.19.0",
+    "google-cloud-secret-manager>=2.20.0",
     "google-cloud-storage>=2.10.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",

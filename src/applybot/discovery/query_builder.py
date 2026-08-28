@@ -6,7 +6,7 @@ import logging
 
 from pydantic import BaseModel
 
-from applybot.llm.client import get_llm
+from applybot.llm.client import complete
 from applybot.models.profile import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -43,8 +43,8 @@ def build_search_queries(
     profile_summary = f"""
 Name: {profile.name}
 Summary: {profile.summary}
-Skills: {', '.join(skills.get('technical', [])) if isinstance(skills.get('technical'), list) else str(skills)}
-Experience areas: {', '.join(exp.get('title', '') for exp in experiences[:5]) if experiences else 'N/A'}
+Skills: {", ".join(skills.get("technical", [])) if isinstance(skills.get("technical"), list) else str(skills)}
+Experience areas: {", ".join(exp.get("title", "") for exp in experiences[:5]) if experiences else "N/A"}
 Job preferences: {preferences}
 """
     prompt = f"""Based on this professional profile, generate {max_queries} varied job search queries
@@ -60,10 +60,12 @@ Profile:
 Return only the queries as a JSON object with a "queries" key containing a list of strings."""
 
     try:
-        result = get_llm().structured_output(
+        result = complete(
+            None,
+            None,
             prompt,
-            GeneratedQueries,
             system="You are a job search expert. Generate precise, effective search queries.",
+            output_type=GeneratedQueries,
         )
         queries = result.queries[:max_queries]
         logger.info("Generated %d search queries from profile", len(queries))

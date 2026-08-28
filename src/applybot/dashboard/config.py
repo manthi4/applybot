@@ -1,5 +1,5 @@
 """
-Values are loaded **only** from real environment variables. 
+Values are loaded **only** from real environment variables.
 Intended for the containerized dashboard (``docker-compose`` / Cloud Run),
 where every setting is injected as an environment variable and no ``.env``
 file exists on disk.

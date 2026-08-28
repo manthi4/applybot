@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from applybot.llm.client import get_llm
+from applybot.llm.client import complete
 from applybot.models.job import Job
 from applybot.models.profile import UserProfile
 
@@ -80,19 +80,20 @@ CANDIDATE PROFILE:
 {profile_context}
 
 QUESTIONS TO ANSWER:
-{chr(10).join(f'{i+1}. {q}' for i, q in enumerate(questions))}
+{chr(10).join(f"{i + 1}. {q}" for i, q in enumerate(questions))}
 
 Provide answers as a JSON object with:
 - "answers": dict mapping each question to its answer
 - "missing_info": list of questions you couldn't fully answer due to missing profile information"""
 
     try:
-        result = get_llm().structured_output(
+        result = complete(
+            None,
+            None,
             prompt,
-            AnswerSet,
             system="You are an expert career coach helping with job applications. Be concise, professional, and truthful.",
-            tier="smart",
             max_tokens=4096,
+            output_type=AnswerSet,
         )
 
         gaps = [
@@ -144,10 +145,11 @@ CANDIDATE PROFILE:
 {profile_context}"""
 
     try:
-        return get_llm().complete(
+        return complete(
+            None,
+            None,
             prompt,
             system="You are an expert career coach. Write authentic, specific cover letters.",
-            tier="smart",
         )
     except Exception:
         logger.exception("Failed to generate cover letter for job %d", job.id)

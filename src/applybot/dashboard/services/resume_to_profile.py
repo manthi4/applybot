@@ -10,9 +10,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from applybot.llm.client import get_llm
-from applybot.models.profile import UserProfile
 from docx import Document
+
+from applybot.llm.client import complete
+from applybot.models.profile import UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 def _extract_raw_resume_text(path: Path) -> str:
     """Extract plain text from a resume file for use as LLM context.
 
-    Supported formats: ``.md``, ``.docx``, and ``.pdf`` 
+    Supported formats: ``.md``, ``.docx``, and ``.pdf``
     (text-based only; scanned/image PDFs are not supported).
     """
     ext = path.suffix.lower()
@@ -66,28 +67,27 @@ Rules:
   - contact_info.linkedin: LinkedIn profile URL or username
   - contact_info.phone: phone number
   - contact_info.github: GitHub profile URL or username
-  Only update a contact_info field if the resume clearly contains that information and the field is currently empty.
+  Only update a contact_info field if the resume clearly contains that information.
 """
 
 
-def _enrich_profile_with_llm(
-    profile: UserProfile, resume_text: str
-) -> UserProfile:
+def _enrich_profile_with_llm(profile: UserProfile, resume_text: str) -> UserProfile:
     """Call the LLM to review the existing profile + resume and return an updated profile."""
     prompt = (
         "Here is the existing user profile (JSON):\n"
         f"{profile.model_dump_json(indent=2)}\n\n"
         "Here is the resume the user just uploaded:\n"
         f"{resume_text}\n\n"
-        "Output the updated user profile. Keep 'id' and 'resume_path' exactly as-is."
+        "Output the updated user profile as JSON. Keep 'id' and 'resume_path' exactly as-is."
     )
 
-    updated = get_llm().structured_output(
+    updated = complete(
+        None,
+        None,
         prompt,
-        UserProfile,
         system=_SYSTEM_PROMPT,
-        tier="smart",
         max_tokens=8192,
+        output_type=UserProfile,
     )
 
     # Always preserve identity/path fields and guard against a missing name
