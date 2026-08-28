@@ -61,19 +61,7 @@ resource "google_cloudfunctions2_function" "discovery" {
     service_account_email = google_service_account.cloud_run.email
 
     environment_variables = {
-      GCP_PROJECT_ID  = var.project_id
-      LLM_MODEL_FAST  = var.llm_model_fast
-      LLM_MODEL_SMART = var.llm_model_smart
-    }
-
-    dynamic "secret_environment_variables" {
-      for_each = var.llm_api_key != "" ? [1] : []
-      content {
-        key        = var.llm_api_key_env_name
-        project_id = var.project_id
-        secret     = google_secret_manager_secret.llm_api_key.secret_id
-        version    = "latest"
-      }
+      GCP_PROJECT_ID = var.project_id
     }
 
     secret_environment_variables {
@@ -87,7 +75,8 @@ resource "google_cloudfunctions2_function" "discovery" {
   depends_on = [
     google_project_service.services,
     google_project_iam_member.cloud_run_firestore,
-    google_project_iam_member.cloud_run_secrets,
+    google_secret_manager_secret_iam_member.cloud_run_secret_accessor,
+    google_secret_manager_secret_iam_member.cloud_run_secret_adder,
   ]
 }
 

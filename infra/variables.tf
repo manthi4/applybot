@@ -9,29 +9,25 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "llm_model_fast" {
-  description = "litellm model string for the 'fast' tier. The prefix selects the provider (gpt-* = OpenAI, claude-* = Anthropic, gemini/* = Google)."
-  type        = string
-  default     = "gpt-4o-mini"
-}
-
-variable "llm_model_smart" {
-  description = "litellm model string for the 'smart' tier. The prefix selects the provider."
-  type        = string
-  default     = "gpt-4o"
-}
-
-variable "llm_api_key" {
-  description = "API key for the configured LLM provider. Injected under the env var named by llm_api_key_env_name (e.g. OPENAI_API_KEY)."
+variable "openai_api_key" {
+  description = "OpenAI API key. Stored in Secret Manager secret openai-api-key; read live by applybot.llm.client. Leave blank to seed via update_provider() at runtime."
   type        = string
   sensitive   = true
   default     = ""
 }
 
-variable "llm_api_key_env_name" {
-  description = "Env var name litellm expects the provider API key under: OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY."
+variable "anthropic_api_key" {
+  description = "Anthropic API key. Stored in Secret Manager secret anthropic-api-key; read live by applybot.llm.client. Leave blank to seed via update_provider() at runtime."
   type        = string
-  default     = "OPENAI_API_KEY"
+  sensitive   = true
+  default     = ""
+}
+
+variable "gemini_api_key" {
+  description = "Google Gemini API key. Stored in Secret Manager secret gemini-api-key; read live by applybot.llm.client. Leave blank to seed via update_provider() at runtime."
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 variable "serpapi_key" {
