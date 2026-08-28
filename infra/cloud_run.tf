@@ -22,6 +22,7 @@ resource "google_secret_manager_secret_iam_member" "cloud_run_secret_accessor" {
     google_secret_manager_secret.llm_provider_key["openai"].id,
     google_secret_manager_secret.llm_provider_key["anthropic"].id,
     google_secret_manager_secret.llm_provider_key["gemini"].id,
+    google_secret_manager_secret.llm_provider_key["glm"].id,
   ])
   secret_id = each.value
   role      = "roles/secretmanager.secretAccessor"

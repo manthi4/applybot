@@ -39,6 +39,7 @@ store *and* update the cache + env var for immediate local effect.
         OPENAI = "openai"
         ANTHROPIC = "anthropic"
         GEMINI = "gemini"
+        GLM = "glm"
     ```
     Each provider knows its API-key env var, its Secret Manager secret id, and the
     model-string prefixes (litellm convention) that select it.
@@ -109,6 +110,7 @@ The provider is selected by the model string prefix (litellm convention):
 | `gpt-4o`, `gpt-4o-mini` | OpenAI | `OPENAI_API_KEY` | `openai-api-key` |
 | `claude-3-5-sonnet-20241022` | Anthropic | `ANTHROPIC_API_KEY` | `anthropic-api-key` |
 | `gemini/gemini-2.0-flash` | Google Gemini | `GEMINI_API_KEY` | `gemini-api-key` |
+| `zai/glm-5.2` | GLM (Z.AI) | `ZAI_API_KEY` | `glm-api-key` |
 
 litellm receives the resolved `api_key` explicitly on each call (no global litellm state),
 so a key changed via `update_provider` takes effect on the very next completion.

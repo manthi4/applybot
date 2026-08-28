@@ -147,7 +147,7 @@ model from Firestore through a short-TTL cache, so the function propagates
 updates within seconds of a `update_provider()` / `set_default_model()` call.
 
 Infra wiring (done in `infra/cloud_functions.tf` / `infra/secrets.tf`):
-- the function's runtime service account (the shared Cloud Run SA) has scoped `roles/secretmanager.secretAccessor` on the per-provider secrets (`openai-api-key`, `anthropic-api-key`, `gemini-api-key`),
+- the function's runtime service account (the shared Cloud Run SA) has scoped `roles/secretmanager.secretAccessor` on the per-provider secrets (`openai-api-key`, `anthropic-api-key`, `gemini-api-key`, `glm-api-key`),
 - LLM keys are no longer bound via a `secret_key_ref` env-var (those resolve only at cold-start); the store layer reads them live,
 - `GCP_PROJECT_ID` is set so the store layer is active.
 

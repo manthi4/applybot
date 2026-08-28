@@ -8,10 +8,12 @@ region                = "us-central1"
 
 # Per-provider API keys. Optionally seed at deploy time; otherwise leave blank
 # and set at runtime via the dashboard (update_provider()). Each is stored in
-# Secret Manager under openai-api-key / anthropic-api-key / gemini-api-key.
+# Secret Manager under openai-api-key / anthropic-api-key / gemini-api-key /
+# glm-api-key.
 openai_api_key        = ""
 anthropic_api_key     = ""
 gemini_api_key        = ""
+glm_api_key           = ""
 
 serpapi_key           = ""
 # Generate with: `applybot setup-auth` (prints the secret + otpauth URI).

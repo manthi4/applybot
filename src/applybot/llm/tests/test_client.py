@@ -230,6 +230,9 @@ class TestProviderPrefixes:
             is LLMProvider.GEMINI
         )
 
+    def test_provider_for_model_glm(self) -> None:
+        assert llm_client.provider_for_model("zai/glm-5.2") is LLMProvider.GLM
+
     def test_provider_for_model_unknown_raises(self) -> None:
         with pytest.raises(ValueError, match="Could not infer LLM provider"):
             llm_client.provider_for_model("unknown-model")

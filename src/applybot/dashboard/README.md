@@ -149,7 +149,7 @@ TTL cache propagates changes across services within seconds.
 **Infra wiring (done):** the Cloud Run service account has scoped
 `roles/secretmanager.secretAccessor` (read) and `roles/secretmanager.secretVersionAdder`
 (write) on the per-provider secrets (`openai-api-key`, `anthropic-api-key`,
-`gemini-api-key`); LLM keys are no longer bound via `secret_key_ref` env vars
+`gemini-api-key`, `glm-api-key`); LLM keys are no longer bound via `secret_key_ref` env vars
 (those resolve only at cold-start). See `infra/cloud_run.tf` / `infra/secrets.tf`.
 
 **TODO (code):** expose dashboard endpoints that call `update_provider` /
@@ -173,7 +173,7 @@ The FastHTML app (`python -m applybot.dashboard.frontend`) is hosted on **GCP Cl
 
 Cloud Run env vars (see `infra/cloud_run.tf`):
 - `GCP_PROJECT_ID` (plain) — GCP project; activates the `llm` store layer (Secret Manager + Firestore)
-- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` — provider API keys, read live from Secret Manager (`openai-api-key` / `anthropic-api-key` / `gemini-api-key`) by `applybot.llm.client` on each cache miss; not bound via `secret_key_ref`
+- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `ZAI_API_KEY` — provider API keys, read live from Secret Manager (`openai-api-key` / `anthropic-api-key` / `gemini-api-key` / `glm-api-key`) by `applybot.llm.client` on each cache miss; not bound via `secret_key_ref`
 - `GCS_BUCKET_NAME` (plain) — bucket for resume storage
 - `SERPAPI_KEY` (Secret Manager) — job scraping
 - `DASHBOARD_TOTP_SECRET` (Secret Manager) — dashboard auth

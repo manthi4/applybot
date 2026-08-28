@@ -21,7 +21,7 @@ This section is meant to give an outline of each component in the applybot syste
         * Applications carry a `status` field: `ready_for_review`, `approved`, `submitted`, `received`, `interview`, `offer`, `rejected`, or `withdrawn` (see `ApplicationStatus` in `models/application.py`).
 4. **Dashboard** — Web UI for reviewing and approving discoverd jobs, managing applications, editing profile, and viewing pipeline statistics.
 
-5. **LLM Engine** - Provider-agnostic LLM client backed by litellm, exposing a consistent API (text completion + structured output) to the rest of the components. The provider is chosen by the model-string prefix (`gpt-*`, `claude-*`, `gemini/*`); provider API keys (Secret Manager) and the default model (Firestore) are mutable at runtime — no redeploy to swap models or rotate keys.
+5. **LLM Engine** - Provider-agnostic LLM client backed by litellm, exposing a consistent API (text completion + structured output) to the rest of the components. The provider is chosen by the model-string prefix (`gpt-*`, `claude-*`, `gemini/*`, `zai/*`); provider API keys (Secret Manager) and the default model (Firestore) are mutable at runtime — no redeploy to swap models or rotate keys.
 
 **Human-in-the-loop**: The agent prepares everything, but never submits without explicit approval. Safety guardrail: the agent never submits without explicit approval.
 

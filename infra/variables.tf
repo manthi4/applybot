@@ -30,6 +30,13 @@ variable "gemini_api_key" {
   default     = ""
 }
 
+variable "glm_api_key" {
+  description = "Z.AI (GLM) API key, env var ZAI_API_KEY. Stored in Secret Manager secret glm-api-key; read live by applybot.llm.client. Leave blank to seed via update_provider() at runtime."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "serpapi_key" {
   description = "SerpAPI key"
   type        = string

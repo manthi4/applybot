@@ -16,12 +16,14 @@ from typing import TypedDict
 class LLMProvider(StrEnum):
     """LLM providers supported by this project.
 
-    The value is the litellm model-string prefix that selects the provider.
+    The value is the provider slug (used for string coercion and secret/env
+    lookups); the model-string prefixes that route to it live in ``prefixes``.
     """
 
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GEMINI = "gemini"
+    GLM = "glm"
 
     @property
     def env_var(self) -> str:
@@ -60,6 +62,11 @@ _PROVIDER_META: dict[LLMProvider, _ProviderInfo] = {
         "env_var": "GEMINI_API_KEY",
         "secret_id": "gemini-api-key",
         "prefixes": ("gemini/", "gemini-"),
+    },
+    LLMProvider.GLM: {
+        "env_var": "ZAI_API_KEY",
+        "secret_id": "glm-api-key",
+        "prefixes": ("zai/",),
     },
 }
 
