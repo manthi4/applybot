@@ -13,17 +13,20 @@ resource "google_project_iam_member" "cloud_run_firestore" {
 # Secret Manager access — scoped per secret, not project-wide.
 #
 # secretAccessor: read access for secrets bound via secret_key_ref (serpapi,
-#   dashboard-totp) and for the per-provider LLM keys read live by
-#   applybot.llm.client's store layer on each cache miss.
+#   dashboard-totp) and for the per-provider LLM keys mounted as volumes and
+#   read by applybot.llm.client on each completion.
 resource "google_secret_manager_secret_iam_member" "cloud_run_secret_accessor" {
-  for_each = toset([
-    google_secret_manager_secret.serpapi_key.id,
-    google_secret_manager_secret.dashboard_totp_secret.id,
-    google_secret_manager_secret.llm_provider_key["openai"].id,
-    google_secret_manager_secret.llm_provider_key["anthropic"].id,
-    google_secret_manager_secret.llm_provider_key["gemini"].id,
-    google_secret_manager_secret.llm_provider_key["glm"].id,
-  ])
+  # Keyed by static names (not secret `.id`s) because the per-provider
+  # secrets do not exist until the first apply, and a for_each set cannot
+  # contain values that are only known after apply.
+  for_each = {
+    serpapi   = google_secret_manager_secret.serpapi_key.id
+    totp      = google_secret_manager_secret.dashboard_totp_secret.id
+    openai    = google_secret_manager_secret.llm_provider_key["openai"].id
+    anthropic = google_secret_manager_secret.llm_provider_key["anthropic"].id
+    gemini    = google_secret_manager_secret.llm_provider_key["gemini"].id
+    glm       = google_secret_manager_secret.llm_provider_key["glm"].id
+  }
   secret_id = each.value
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
@@ -68,6 +71,19 @@ resource "google_cloud_run_v2_service" "applybot" {
 
       ports {
         container_port = 8000
+      }
+
+      # Provider API keys: volume-mounted (not env-bound) so key rotations
+      # written to Secret Manager by update_provider() reach this service
+      # without a new revision -- the platform refreshes the mounts. Each
+      # secret mounts as a directory of version files incl. a `latest` entry,
+      # which is what applybot.llm.client reads.
+      dynamic "volume_mounts" {
+        for_each = local.llm_secret_ids
+        content {
+          name       = volume_mounts.value
+          mount_path = "/etc/secrets/${volume_mounts.value}"
+        }
       }
 
       env {
@@ -132,6 +148,18 @@ resource "google_cloud_run_v2_service" "applybot" {
         limits = {
           cpu    = "1"
           memory = "512Mi"
+        }
+      }
+    }
+
+    # One secret volume per provider key; no version items pinned, so the
+    # mount materializes every version plus `latest` and follows new versions.
+    dynamic "volumes" {
+      for_each = local.llm_secret_ids
+      content {
+        name = volumes.value
+        secret {
+          secret = google_secret_manager_secret.llm_provider_key[volumes.key].id
         }
       }
     }

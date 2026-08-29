@@ -70,6 +70,19 @@ resource "google_cloudfunctions2_function" "discovery" {
       secret     = google_secret_manager_secret.serpapi_key.secret_id
       version    = "latest"
     }
+
+    # Provider API keys as volume mounts (not env vars): the runtime refreshes
+    # the mounts when update_provider() adds a new secret version, so key
+    # rotations reach warm instances without a redeploy. Versions omitted ->
+    # latest; applybot.llm.client reads <mount_path>/latest.
+    dynamic "secret_volumes" {
+      for_each = local.llm_secret_ids
+      content {
+        mount_path = "/etc/secrets/${secret_volumes.value}"
+        project_id = var.project_id
+        secret     = secret_volumes.value
+      }
+    }
   }
 
   depends_on = [
