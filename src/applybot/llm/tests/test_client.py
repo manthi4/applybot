@@ -50,10 +50,10 @@ def _env_only(monkeypatch: pytest.MonkeyPatch) -> Any:
         monkeypatch.delenv(p.env_var, raising=False)
     monkeypatch.delenv("LLM_MODEL_DEFAULT", raising=False)
     llm_client._key_cache.clear()
-    llm_client._model_cache = None
+    llm_client._model_cache.clear()
     yield
     llm_client._key_cache.clear()
-    llm_client._model_cache = None
+    llm_client._model_cache.clear()
 
 
 class TestComplete:

@@ -21,7 +21,7 @@ This section is meant to give an outline of each component in the applybot syste
         * Applications carry a `status` field: `ready_for_review`, `approved`, `submitted`, `received`, `interview`, `offer`, `rejected`, or `withdrawn` (see `ApplicationStatus` in `models/application.py`).
 4. **Dashboard** — Web UI for reviewing and approving discoverd jobs, managing applications, editing profile, and viewing pipeline statistics.
 
-5. **LLM Engine** - Provider-agnostic LLM client backed by litellm, exposing a consistent API (text completion + structured output) to the rest of the components. The provider is chosen by the model-string prefix (`gpt-*`, `claude-*`, `gemini/*`, `zai/*`); provider API keys (Secret Manager) and the default model (Firestore) are mutable at runtime — no redeploy to swap models or rotate keys.
+5. **LLM Engine** - Provider-agnostic LLM client exposing a consistent API (text completion + structured output) to the rest of the components. The active provider and default model are configurable at runtime without redeploying (see the [LLM README](src/applybot/llm/README.md)).
 
 **Human-in-the-loop**: The agent prepares everything, but never submits without explicit approval. Safety guardrail: the agent never submits without explicit approval.
 
@@ -43,9 +43,9 @@ applybot/
 ├── infra/                  # Terraform IaC (Cloud Run, Cloud Functions, Firestore, GCS, secrets)
 ├── src/applybot/
 │   ├── application/        # Resume parsing/generation, tailoring, Q&A, cover letters
-│   ├── dashboard/          # FastHTML web UI (pages/, services/, components/, theme)
-│   ├── discovery/          # Job discovery pipeline + scrapers/ + Cloud Function entry point
-│   ├── llm/                # LLM client — litellm-backed, provider-agnostic (providers, _backends, client)
+│   ├── dashboard/          # FastHTML web UI
+│   ├── discovery/          # Job discovery pipeline + Cloud Function entry point
+│   ├── llm/                # Provider-agnostic LLM client
 │   ├── models/             # Pydantic models + Firestore CRUD (Job, Application, UserProfile)
 │   ├── cli.py              # `applybot` CLI (serve, setup-auth)
 │   └── storage.py          # GCS storage layer for file storage (resumes, etc.)
@@ -64,7 +64,7 @@ The top level tests/ repo is intended for integration tests involving multiple c
 ## Cross-Cutting Dependencies
 
 - **LLM Engine** — Used by: Discovery Function, Application Preperation Function, Dashboard
-- **Models** — Shared Firestore data layer accessed by all components
+- **Models** — Shared Firestore data layer accessed by all components; all Firestore reads and writes go through `models` — no other component talks to Firestore directly
 
 ---
 
@@ -128,7 +128,7 @@ pytest
 
 | Decision | Rationale |
 |---|---|
-| Provider-agnostic LLM via litellm (no LangChain) | Swap providers by changing the model string; API keys and default model are runtime-mutable (Secret Manager + Firestore), no vendor lock-in |
+| Provider-agnostic LLM abstraction (no LangChain) | Swap providers with a config change; API key and default model are runtime-mutable — no vendor lock-in (details in the LLM component README) |
 | Firestore (serverless NoSQL) | No DB server to manage or pay for; generous free tier, scales automatically |
 | Human-in-the-loop | Agent never submits without explicit approval |
 | Resume honesty guardrail | Tailoring can only rephrase/reorder, not fabricate |
@@ -161,7 +161,7 @@ The dashboard scales 0–1 (serverless, pay-per-use). Discovery runs on a Cloud 
 ## Cost Considerations
 
 - **SerpAPI**: ~$50/month for 5,000 searches
-- **LLM calls (OpenAI / Anthropic / Gemini via litellm)**: Costs depend on usage; billed directly by whichever provider's API key is configured; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
+- **LLM calls (OpenAI / Anthropic / Gemini)**: Costs depend on usage; billed directly by whichever provider's API key is configured; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
 - **Greenhouse/Lever APIs**: Free (public)
 - **Firestore**: Free tier (1 GiB storage + 50K reads/day) — essentially free at low usage
 - **GCP Cloud Functions**: Free tier covers light usage

@@ -1,9 +1,11 @@
-"""GCP backing stores for the LLM client.
+"""GCP Secret Manager shims for the LLM client.
 
-Secret Manager holds API keys; Firestore holds the default model. These are
-pure I/O shims over the GCP SDKs -- all caching and policy lives in
-:mod:`applybot.llm.client`. Outside GCP (no ``GCP_PROJECT_ID``) the client does
-not engage these helpers, so local dev/tests run env-only.
+Secret Manager holds the provider API keys; these are pure I/O shims over the
+GCP SDKs -- all caching and policy lives in :mod:`applybot.llm.client`. The
+default model lives in the Firestore ``config/llm`` document, accessed via
+:mod:`applybot.models.config` (the models component owns all Firestore CRUD).
+Outside GCP (no ``GCP_PROJECT_ID``) the client does not engage these helpers,
+so local dev/tests run env-only.
 """
 
 from __future__ import annotations
@@ -12,6 +14,8 @@ import logging
 import os
 from functools import lru_cache
 from typing import Any
+
+from google.api_core import exceptions
 
 from .providers import LLMProvider
 
@@ -43,8 +47,6 @@ def _secret_name(provider: LLMProvider) -> str:
 
 def ensure_secret_exists(provider: LLMProvider) -> None:
     """Create the secret shell if it does not yet exist (idempotent)."""
-    from google.api_core import exceptions
-
     client = secret_client()
     try:
         client.get_secret(request={"name": _secret_name(provider)})
@@ -60,8 +62,6 @@ def ensure_secret_exists(provider: LLMProvider) -> None:
 
 def read_secret(provider: LLMProvider) -> str:
     """Read the latest secret version, returning ``""`` if absent/empty."""
-    from google.api_core import exceptions
-
     client = secret_client()
     try:
         resp = client.access_secret_version(
@@ -87,20 +87,3 @@ def write_secret(provider: LLMProvider, value: str) -> None:
             "payload": {"data": value.encode("utf-8")},
         }
     )
-
-
-# ---------------------------------------------------------------------------
-# Firestore (default model)
-# ---------------------------------------------------------------------------
-
-
-@lru_cache(maxsize=1)
-def firestore() -> Any:
-    """Lazily build the Firestore client (cached for the process)."""
-    from google.cloud.firestore_v1 import Client
-
-    kwargs: dict[str, Any] = {}
-    pid = project_id()
-    if pid:
-        kwargs["project"] = pid
-    return Client(**kwargs)

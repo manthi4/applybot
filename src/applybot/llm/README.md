@@ -5,7 +5,7 @@ so swapping the underlying model is a config change, not a code change — no ve
 
 ## Files
 - **providers.py** — `LLMProvider` enum, per-provider metadata, and model-prefix routing (leaf: no runtime state, easy to extend)
-- **_backends.py** — GCP I/O shims: Secret Manager (API keys) and Firestore (default model)
+- **_backends.py** — GCP I/O shims: Secret Manager (API keys)
 - **client.py** — the public API: TTL caches, runtime-mutable provider/model stores, and `complete()` (no singleton, no `config.py`)
 
 ## Design: runtime-mutable config
@@ -16,8 +16,9 @@ set of providers itself is a code edit in `providers.py`). There is deliberately
 fresh from the environment or its backing store on each access.
 
 - **API keys** live in **GCP Secret Manager** (one secret per provider).
-- **Default model** lives in a **Firestore** document (`config/llm` → `default_model`).
-  Model names are not secret, so Firestore — not Secret Manager — is the right store.
+- **Default model** lives in a **Firestore** document (`config/llm` → `default_model`)
+  (CRUD via the `models` component). Model names are not secret, so Firestore —
+  not Secret Manager — is the right store.
 
 Both are read through a short-TTL in-process cache (~30 s), so every service that imports
 this module picks up a change within seconds without a redeploy. Writes
@@ -126,6 +127,6 @@ Reads need `roles/secretmanager.secretAccessor`. See `infra/secrets.tf` and `inf
 
 ## Boundaries
 
-- **Depends on**: no other applybot component (talks to Firestore / Secret Manager directly
-  via `GCP_PROJECT_ID`, mirroring the `models` leaf pattern — does not import `models`)
+- **Depends on**: `models` (Firestore config CRUD via its config helpers); talks to
+  GCP Secret Manager directly via `GCP_PROJECT_ID`; imports no other applybot component
 - **No knowledge of domain models** — this is a generic LLM utility

@@ -1,15 +1,11 @@
 project_id            = "your-gcp-project-id"
 region                = "us-central1"
 
-# LLM (litellm) — the model-string prefix selects the provider.
-# The default model is NOT configured here: it lives in the Firestore
-# config/llm.default_model doc (set via the dashboard / set_default_model()).
-# On a fresh deploy, call set_default_model() once before LLM calls work.
+# LLM — the default model is not configured here; it lives in Firestore and
+# is set at runtime via the dashboard (see src/applybot/llm/README.md).
 
-# Per-provider API keys. Optionally seed at deploy time; otherwise leave blank
-# and set at runtime via the dashboard (update_provider()). Each is stored in
-# Secret Manager under openai-api-key / anthropic-api-key / gemini-api-key /
-# glm-api-key.
+# Per-provider LLM API keys — optional deploy-time seed; leave blank to set
+# at runtime via the dashboard (see src/applybot/llm/README.md).
 openai_api_key        = ""
 anthropic_api_key     = ""
 gemini_api_key        = ""

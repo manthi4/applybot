@@ -8,11 +8,12 @@ code change.
 
 Provider API keys and the default model are **mutable at runtime** -- callers
 may update or delete providers and change the default model while the app is
-deployed. Keys live in GCP Secret Manager; the default model lives in a
-Firestore ``config/llm`` document. The GCP I/O lives in
-:mod:`applybot.llm._backends`; this module owns the short-TTL in-process caches
-so every service importing it picks up changes within seconds without a
-redeploy.
+deployed. Keys live in GCP Secret Manager (I/O shims in
+:mod:`applybot.llm._backends`); the default model lives in a Firestore
+``config/llm`` document accessed via :mod:`applybot.models.config` (the models
+component owns all Firestore CRUD). This module owns the short-TTL in-process
+caches (:class:`_TTLCache` instances, not ``functools.lru_cache``) so every
+service importing it picks up changes within seconds without a redeploy.
 
 There is deliberately no ``config.py`` / settings object: every value is read
 fresh from the environment or the backing store on each access, because these
@@ -32,6 +33,8 @@ from typing import Any, overload
 
 import litellm
 from pydantic import BaseModel
+
+from applybot.models.config import get_config_value, set_config_value
 
 from . import _backends
 from .providers import (
@@ -62,14 +65,51 @@ def _max_retries() -> int:
 
 
 # ---------------------------------------------------------------------------
+# TTL cache: in-process, short-lived, write-through
+# ---------------------------------------------------------------------------
+
+
+class _TTLCache[K, V]:
+    """In-process TTL cache with write-through updates.
+
+    functools.lru_cache cannot replace this: it has no TTL (cross-service
+    updates would never propagate to already-warm processes) and no
+    write-through invalidation.
+    """
+
+    def __init__(self, ttl: float = _CACHE_TTL_SECONDS) -> None:
+        """Build a cache whose entries expire after ``ttl`` seconds."""
+        self._ttl = ttl
+        self._entries: dict[K, tuple[V, float]] = {}
+
+    def get(self, key: K) -> V | None:
+        """Return the cached value, or ``None`` on a miss or expired entry."""
+        entry = self._entries.get(key)
+        if entry is None:
+            return None
+        value, stored_at = entry
+        if time.monotonic() - stored_at >= self._ttl:
+            return None
+        return value
+
+    def set(self, key: K, value: V) -> None:
+        """Store ``value`` under ``key`` with a fresh TTL (write-through)."""
+        self._entries[key] = (value, time.monotonic())
+
+    def pop(self, key: K) -> None:
+        """Drop ``key`` if present (no error when absent); used on delete."""
+        self._entries.pop(key, None)
+
+    def clear(self) -> None:
+        """Drop every entry (test isolation)."""
+        self._entries.clear()
+
+
+# ---------------------------------------------------------------------------
 # Key store: env var (in-process) + Secret Manager (cross-service), TTL cached
 # ---------------------------------------------------------------------------
 
-_key_cache: dict[LLMProvider, tuple[str, float]] = {}
-
-
-def _cache_valid(ts: float) -> bool:
-    return (time.monotonic() - ts) < _CACHE_TTL_SECONDS
+_key_cache = _TTLCache[LLMProvider, str]()
 
 
 def _get_provider_key(provider: LLMProvider) -> str:
@@ -79,8 +119,8 @@ def _get_provider_key(provider: LLMProvider) -> str:
     (which populates both the cache and the env var so litellm can also find it).
     """
     cached = _key_cache.get(provider)
-    if cached and _cache_valid(cached[1]):
-        return cached[0]
+    if cached is not None:
+        return cached
 
     key = os.environ.get(provider.env_var, "")
     if not key and _backends.project_id():
@@ -88,7 +128,7 @@ def _get_provider_key(provider: LLMProvider) -> str:
         if key:
             os.environ[provider.env_var] = key
 
-    _key_cache[provider] = (key, time.monotonic())
+    _key_cache.set(provider, key)
     return key
 
 
@@ -106,7 +146,7 @@ def update_provider(provider: LLMProvider | str, api_key: str) -> None:
     if not isinstance(provider, LLMProvider):
         provider = LLMProvider(provider)
     os.environ[provider.env_var] = api_key
-    _key_cache[provider] = (api_key, time.monotonic())
+    _key_cache.set(provider, api_key)
     if _backends.project_id():
         try:
             _backends.write_secret(provider, api_key)
@@ -119,7 +159,7 @@ def delete_provider(provider: LLMProvider | str) -> None:
     if not isinstance(provider, LLMProvider):
         provider = LLMProvider(provider)
     os.environ.pop(provider.env_var, None)
-    _key_cache.pop(provider, None)
+    _key_cache.pop(provider)
     if _backends.project_id():
         try:
             _backends.write_secret(provider, "")
@@ -131,30 +171,24 @@ def delete_provider(provider: LLMProvider | str) -> None:
 # Default model store: Firestore ``config/llm`` doc, TTL cached
 # ---------------------------------------------------------------------------
 
-_model_cache: tuple[str, float] | None = None
+_MODEL_CACHE_KEY = "default_model"
+_model_cache = _TTLCache[str, str]()
 
 
 def get_default_model() -> str:
     """Return the default model.
 
-    Order: TTL-cached value, then Firestore ``config/llm.default_model``, then
-    the ``LLM_MODEL_DEFAULT`` env var.
+    Order: TTL-cached value, then Firestore ``config/llm.default_model`` (via
+    :mod:`applybot.models.config`), then the ``LLM_MODEL_DEFAULT`` env var.
     """
-    global _model_cache
-    if _model_cache and _cache_valid(_model_cache[1]):
-        return _model_cache[0]
+    cached = _model_cache.get(_MODEL_CACHE_KEY)
+    if cached is not None:
+        return cached
 
     model = ""
     if _backends.project_id():
         try:
-            doc = (
-                _backends.firestore()
-                .collection("config")
-                .document(_DEFAULT_MODEL_DOC)
-                .get()
-            )
-            if doc.exists:
-                model = (doc.to_dict() or {}).get(_DEFAULT_MODEL_FIELD, "") or ""
+            model = get_config_value(_DEFAULT_MODEL_DOC, _DEFAULT_MODEL_FIELD)
         except Exception:  # noqa: BLE001 - degrade to env on Firestore failure
             logger.warning(
                 "Firestore read of default model failed; falling back to env"
@@ -163,20 +197,17 @@ def get_default_model() -> str:
     if not model:
         model = os.environ.get("LLM_MODEL_DEFAULT", "")
 
-    _model_cache = (model, time.monotonic())
+    _model_cache.set(_MODEL_CACHE_KEY, model)
     return model
 
 
 def set_default_model(model: str) -> None:
     """Set the default model: env var (immediate) + Firestore (cross-service)."""
-    global _model_cache
     os.environ["LLM_MODEL_DEFAULT"] = model
-    _model_cache = (model, time.monotonic())
+    _model_cache.set(_MODEL_CACHE_KEY, model)
     if _backends.project_id():
         try:
-            _backends.firestore().collection("config").document(_DEFAULT_MODEL_DOC).set(
-                {_DEFAULT_MODEL_FIELD: model}
-            )
+            set_config_value(_DEFAULT_MODEL_DOC, _DEFAULT_MODEL_FIELD, model)
         except Exception:  # noqa: BLE001
             logger.exception("Failed to persist default model to Firestore")
 

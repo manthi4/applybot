@@ -30,33 +30,21 @@ resource "google_secret_manager_secret_version" "dashboard_totp_secret" {
 }
 
 # ---------------------------------------------------------------------------
-# Per-provider LLM API keys.
-#
-# secret_id values MUST match the ids hardcoded in
-# applybot.llm.providers.LLMProvider (openai-api-key / anthropic-api-key /
-# gemini-api-key / glm-api-key). The store layer reads keys live from Secret Manager on each
-# cache miss (not via Cloud Run secret_key_ref, which only resolves at
-# cold-start), so keys can be rotated at runtime by update_provider().
-#
-# The secret shells are created unconditionally; versions are seeded only when a
-# key is supplied at deploy time. `count` (not for_each) gates the version
-# resources because the key values are sensitive and Terraform forbids sensitive
-# values in for_each arguments.
+# Per-provider LLM API keys. Secret ids must match applybot.llm.providers.
+# LLMProvider. Shells are created unconditionally; versions are seeded only
+# when a key var is supplied. Versions use `count` (not for_each) because
+# Terraform forbids sensitive values in for_each.
 # ---------------------------------------------------------------------------
 
 locals {
-  # Non-sensitive: provider -> secret id (must match applybot.llm.providers).
-  llm_provider_secret_ids = {
-    openai    = "openai-api-key"
-    anthropic = "anthropic-api-key"
-    gemini    = "gemini-api-key"
-    glm       = "glm-api-key"
-  }
+  # Provider slugs must match applybot.llm.providers.LLMProvider;
+  # secret ids follow the "<slug>-api-key" convention.
+  llm_providers = toset(["openai", "anthropic", "gemini", "glm"])
 }
 
 resource "google_secret_manager_secret" "llm_provider_key" {
-  for_each  = local.llm_provider_secret_ids
-  secret_id = each.value
+  for_each  = local.llm_providers
+  secret_id = "${each.value}-api-key"
 
   replication {
     auto {}
