@@ -20,11 +20,12 @@ set of providers itself is a code edit in `providers.py`). There is deliberately
 fresh on each access.
 
 - **API keys** live in **GCP Secret Manager** (one secret per provider) and are delivered
-  to every runtime as **volume-mounted files** (`/etc/secrets/<secret_id>`, version
-  `latest`). The platform refreshes mounted secret files automatically when a new version
-  is added — no restart, no new revision — so a key rotated from the dashboard reaches all
-  services within minutes. `client.py` re-reads the file on each completion (a small-file
-  read costs microseconds), so there is **no key cache and no env-var write-back**.
+  to every runtime as **volume mounts**: each secret appears as a directory of version
+  files with a `latest` entry (`/etc/secrets/<secret_id>/latest`), which the platform
+  refreshes automatically when a new version is added — no restart, no new revision —
+  so a key rotated from the dashboard reaches all services within minutes.
+  `client.py` re-reads the `latest` file on each completion (a small-file read costs
+  microseconds), so there is **no key cache and no env-var write-back**.
 - **Default model** lives in a **Firestore** document (`config/llm` → `default_model`)
   (CRUD via the `models` component) behind a short-TTL in-process cache. Model names are
   not secret, so Firestore — not Secret Manager — is the right store.
@@ -66,14 +67,14 @@ write APIs yet — see the TODO in `dashboard/README.md`.
     Adds a new GCP Secret Manager version for the provider's secret and records an
     in-process override (immediate effect in the writing process). Other services pick
     the new key up when the platform refreshes their volume mount (typically within
-    minutes). Locally (no `GCP_PROJECT_ID`) it just sets the env-var fallback.
+    minutes). Locally (no `GCP_PROJECT_ID`) it records the override only.
 
 * Delete provider
     ```python
     def delete_provider(provider: LLMProvider | str) -> None
     ```
-    Adds a blank secret version (mounts refresh to empty) and clears the in-process
-    override / env-var fallback.
+    Adds a blank secret version (mounts refresh to empty) and blanks the in-process
+    override.
 
 * Get default model
     ```python
@@ -111,7 +112,7 @@ write APIs yet — see the TODO in `dashboard/README.md`.
 
 | Env var | Purpose |
 |---|---|
-| `LLM_SECRETS_DIR` | `/etc/secrets` — directory where provider key secrets are volume-mounted; point it at a local dir in tests to exercise the mount path |
+| `LLM_SECRETS_DIR` | `/etc/secrets` — directory where provider key secrets are volume-mounted (each secret is a subdirectory with a `latest` file); point it at a local dir in tests to exercise the mount path |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `ZAI_API_KEY` | local-dev/tests fallback when the mount is absent; not provisioned on GCP |
 | `LLM_MODEL_DEFAULT` | optional fallback default model when the Firestore `config/llm` doc is absent or unreadable; not provisioned by Terraform (Firestore is the source of truth) |
 | `LLM_MAX_RETRIES` | `3` — litellm retries on transient provider failures |
@@ -131,11 +132,12 @@ so a key changed via `update_provider` takes effect on the very next completion.
 
 ## Infra
 
-Provider secrets are mounted (version `latest`) at `/etc/secrets/<secret_id>` in both the
-Cloud Run service (`volumes` / `volume_mounts` in `infra/cloud_run.tf`) and the discovery
-Cloud Function (`secret_volumes` in `infra/cloud_functions.tf`), so every runtime needs
-`roles/secretmanager.secretAccessor` on the per-provider secrets (scoped, not
-project-wide).
+Provider secrets are mounted in both the Cloud Run service (`volumes` / `volume_mounts`
+in `infra/cloud_run.tf`) and the discovery Cloud Function (`secret_volumes` in
+`infra/cloud_functions.tf`), each at `/etc/secrets/<secret_id>` with no version pinned —
+the mount materializes every version plus a `latest` entry, which is what the client
+reads. Every runtime needs `roles/secretmanager.secretAccessor` on the per-provider
+secrets (scoped, not project-wide).
 
 `update_provider` / `delete_provider` / `set_default_model` write to GCP Secret Manager
 and Firestore, so the service they run in needs:

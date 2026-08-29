@@ -1,7 +1,9 @@
-"""GCP Secret Manager shims for the LLM client.
+"""GCP Secret Manager write shims for the LLM client.
 
-Secret Manager holds the provider API keys; these are pure I/O shims over the
-GCP SDKs -- all caching and policy lives in :mod:`applybot.llm.client`. The
+Secret Manager holds the provider API keys. Reads do not go through these
+shims: every runtime receives the keys as volume-mounted files (refreshed by
+the platform when a new version is added), and only ``update_provider`` /
+``delete_provider`` write new secret versions via :func:`write_secret`. The
 default model lives in the Firestore ``config/llm`` document, accessed via
 :mod:`applybot.models.config` (the models component owns all Firestore CRUD).
 Outside GCP (no ``GCP_PROJECT_ID``) the client does not engage these helpers,
@@ -10,7 +12,6 @@ so local dev/tests run env-only.
 
 from __future__ import annotations
 
-import logging
 import os
 from functools import lru_cache
 from typing import Any
@@ -18,8 +19,6 @@ from typing import Any
 from google.api_core import exceptions
 
 from .providers import LLMProvider
-
-logger = logging.getLogger(__name__)
 
 
 def project_id() -> str | None:
@@ -29,7 +28,7 @@ def project_id() -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Secret Manager (API keys)
+# Secret Manager (API keys) -- write path only; reads use the volume mount
 # ---------------------------------------------------------------------------
 
 
@@ -58,23 +57,6 @@ def ensure_secret_exists(provider: LLMProvider) -> None:
                 "secret": {"replication": {"automatic": {}}},
             }
         )
-
-
-def read_secret(provider: LLMProvider) -> str:
-    """Read the latest secret version, returning ``""`` if absent/empty."""
-    client = secret_client()
-    try:
-        resp = client.access_secret_version(
-            request={"name": f"{_secret_name(provider)}/versions/latest"}
-        )
-        return str(resp.payload.data.decode("utf-8"))
-    except exceptions.NotFound:
-        return ""
-    except Exception:  # noqa: BLE001 - degrade to env-only on any SM failure
-        logger.warning(
-            "Secret Manager read failed for %s; falling back to env", provider
-        )
-        return os.environ.get(provider.env_var, "")
 
 
 def write_secret(provider: LLMProvider, value: str) -> None:

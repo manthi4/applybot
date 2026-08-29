@@ -1,13 +1,16 @@
 """Tests for the litellm-backed LLM client.
 
 litellm itself is mocked, and GCP is disabled (no ``GCP_PROJECT_ID``) so the
-store runs in env-only mode. These tests assert the client's contract: model
-selection, message building, response parsing, provider inference, and the
+client runs in env-only mode. These tests assert the client's contract: model
+selection, message building, response parsing, provider inference, key
+lookup (in-process override → mounted secret file → env var), and the
 runtime-mutable provider/default-model state -- all without network calls.
 """
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -44,15 +47,16 @@ def _fake_response(content: str | None) -> Any:
 
 @pytest.fixture(autouse=True)
 def _env_only(monkeypatch: pytest.MonkeyPatch) -> Any:
-    """Run in env-only mode (no GCP) and isolate caches + env vars per test."""
+    """Run in env-only mode (no GCP, no mount) and isolate state per test."""
     monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LLM_SECRETS_DIR", raising=False)
     for p in LLMProvider:
         monkeypatch.delenv(p.env_var, raising=False)
     monkeypatch.delenv("LLM_MODEL_DEFAULT", raising=False)
-    llm_client._key_cache.clear()
+    llm_client._key_overrides.clear()
     llm_client._model_cache.clear()
     yield
-    llm_client._key_cache.clear()
+    llm_client._key_overrides.clear()
     llm_client._model_cache.clear()
 
 
@@ -199,6 +203,97 @@ class TestProviderStore:
             LLMProvider.OPENAI,
             LLMProvider.GEMINI,
         }
+
+    @patch("applybot.llm.client._backends.write_secret")
+    def test_update_writes_secret_version(
+        self, mock_write: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("GCP_PROJECT_ID", "proj")
+
+        update_provider(LLMProvider.OPENAI, "sk-test")
+
+        mock_write.assert_called_once_with(LLMProvider.OPENAI, "sk-test")
+        assert llm_client._key_overrides[LLMProvider.OPENAI] == "sk-test"
+        assert "OPENAI_API_KEY" not in os.environ  # no env-var write-back
+
+    @patch("applybot.llm.client._backends.write_secret")
+    def test_delete_writes_blank_version(
+        self, mock_write: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("GCP_PROJECT_ID", "proj")
+        update_provider(LLMProvider.OPENAI, "sk-test")
+
+        delete_provider(LLMProvider.OPENAI)
+
+        mock_write.assert_called_with(LLMProvider.OPENAI, "")
+        assert get_configured_providers() == []
+
+
+class TestKeyLookup:
+    """Key resolution order: in-process override → mounted file → env var."""
+
+    @staticmethod
+    def _mount(tmp_path: Path, provider: LLMProvider, value: str) -> None:
+        """Write a mounted-secret lookalike: ``<dir>/<secret_id>/latest``."""
+        secret_dir = tmp_path / provider.secret_id
+        secret_dir.mkdir()
+        (secret_dir / "latest").write_text(value, encoding="utf-8")
+
+    def test_mounted_file_beats_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_SECRETS_DIR", str(tmp_path))
+        monkeypatch.setenv(LLMProvider.OPENAI.env_var, "sk-env")
+        self._mount(tmp_path, LLMProvider.OPENAI, "sk-mounted\n")
+
+        assert llm_client._get_provider_key(LLMProvider.OPENAI) == "sk-mounted"
+
+    def test_env_var_when_no_mount(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(LLMProvider.OPENAI.env_var, "sk-env")
+
+        assert llm_client._get_provider_key(LLMProvider.OPENAI) == "sk-env"
+
+    def test_override_beats_mount_and_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_SECRETS_DIR", str(tmp_path))
+        monkeypatch.setenv(LLMProvider.OPENAI.env_var, "sk-env")
+        self._mount(tmp_path, LLMProvider.OPENAI, "sk-mounted")
+        llm_client._key_overrides[LLMProvider.OPENAI] = "sk-new"
+
+        assert llm_client._get_provider_key(LLMProvider.OPENAI) == "sk-new"
+
+    def test_mount_refresh_seen_without_restart(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A new secret version must be visible on the next access in the same
+        process -- the propagation the old TTL/env-var design broke."""
+        monkeypatch.setenv("LLM_SECRETS_DIR", str(tmp_path))
+        self._mount(tmp_path, LLMProvider.OPENAI, "sk-v1")
+        assert llm_client._get_provider_key(LLMProvider.OPENAI) == "sk-v1"
+
+        (tmp_path / LLMProvider.OPENAI.secret_id / "latest").write_text(
+            "sk-v2", encoding="utf-8"
+        )
+
+        assert llm_client._get_provider_key(LLMProvider.OPENAI) == "sk-v2"
+
+    @patch("applybot.llm.client.litellm")
+    def test_complete_uses_mounted_key(
+        self,
+        mock_litellm: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        mock_litellm.completion.return_value = _fake_response("ok")
+        monkeypatch.setenv("LLM_SECRETS_DIR", str(tmp_path))
+        monkeypatch.setenv("LLM_MODEL_DEFAULT", "gpt-4o-mini")
+        self._mount(tmp_path, LLMProvider.OPENAI, "sk-mounted")
+
+        complete(None, None, "hi")
+
+        _, kwargs = mock_litellm.completion.call_args
+        assert kwargs["api_key"] == "sk-mounted"
 
 
 class TestDefaultModel:
