@@ -5,32 +5,41 @@ so swapping the underlying model is a config change, not a code change — no ve
 
 ## Files
 - **providers.py** — `LLMProvider` enum, per-provider metadata, and model-prefix routing (leaf: no runtime state, easy to extend)
-- **_backends.py** — GCP I/O shims: Secret Manager (API keys)
-- **client.py** — the public API: TTL caches, runtime-mutable provider/model stores, and `complete()` (no singleton, no `config.py`)
+- **_backends.py** — GCP Secret Manager write shims (new secret versions on key update/delete); reads happen via the platform volume mount, not the API
+- **client.py** — the public API: mounted-file key lookup, Firestore-backed default-model store (TTL-cached), and `complete()` (no singleton, no `config.py`)
 
 ## Design: runtime-mutable config
+
+> **Status:** target spec for the `sal/rework_llm_api_key_caching` rework (docs-first
+> commit; code and Terraform changes follow on this branch). The PR description on that
+> branch covers the migration plan and the stale-key bug in the previous design.
 
 Provider API keys and the default model are **mutable while the app is deployed** (the
 set of providers itself is a code edit in `providers.py`). There is deliberately no
 `config.py` / settings object — these values change at runtime, so every value is read
-fresh from the environment or its backing store on each access.
+fresh on each access.
 
-- **API keys** live in **GCP Secret Manager** (one secret per provider).
+- **API keys** live in **GCP Secret Manager** (one secret per provider) and are delivered
+  to every runtime as **volume mounts**: each secret appears as a directory of version
+  files with a `latest` entry (`/etc/secrets/<secret_id>/latest`), which the platform
+  refreshes automatically when a new version is added — no restart, no new revision —
+  so a key rotated from the dashboard reaches all services within minutes.
+  `client.py` re-reads the `latest` file on each completion (a small-file read costs
+  microseconds), so there is **no key cache and no env-var write-back**.
 - **Default model** lives in a **Firestore** document (`config/llm` → `default_model`)
-  (CRUD via the `models` component). Model names are not secret, so Firestore —
-  not Secret Manager — is the right store.
+  (CRUD via the `models` component) behind a short-TTL in-process cache. Model names are
+  not secret, so Firestore — not Secret Manager — is the right store.
 
-Both are read through a short-TTL in-process cache (~30 s), so every service that imports
-this module picks up a change within seconds without a redeploy. Writes
-(`update_provider` / `delete_provider` / `set_default_model`) write through to the backing
-store *and* update the cache + env var for immediate local effect.
+Writes (`update_provider` / `delete_provider` / `set_default_model`) write through to the
+backing store *and* record an in-process override, so the writing process (the dashboard)
+uses the new value immediately instead of waiting for the mount to refresh.
 
-> **Cross-service note:** Cloud Run/Functions resolve `secret_key_ref` env vars at instance
-> cold-start, not per call. Because this module fetches keys/model from the backing store on
-> each (cached) access rather than relying on those bound env vars, changes propagate to
-> already-warm instances of every service that imports it (the dashboard and the Cloud
-> Functions both do). The remaining gap is administrative, not infrastructural: no dashboard
-> endpoints call the write APIs yet — see the TODO in `dashboard/README.md`.
+Key lookup order: in-process override → mounted file (`LLM_SECRETS_DIR`, default
+`/etc/secrets`) → provider env var. The env var exists as the **local-dev/tests
+fallback** (no mount on a laptop); it is not provisioned on GCP.
+
+The remaining gap is administrative, not infrastructural: no dashboard endpoints call the
+write APIs yet — see the TODO in `dashboard/README.md`.
 
 ## Public API
 
@@ -53,16 +62,19 @@ store *and* update the cache + env var for immediate local effect.
 
 * Update provider
     ```python
-    def update_provider(provider: LLMProvider | str, api_key: str) -> None:
+    def update_provider(provider: LLMProvider | str, api_key: str) -> None
     ```
-    Sets the API key for that provider as an env variable (immediate local effect) and
-    writes it to GCP Secret Manager so other services pick it up within the cache TTL.
+    Adds a new GCP Secret Manager version for the provider's secret and records an
+    in-process override (immediate effect in the writing process). Other services pick
+    the new key up when the platform refreshes their volume mount (typically within
+    minutes). Locally (no `GCP_PROJECT_ID`) it records the override only.
 
 * Delete provider
     ```python
-    def delete_provider(provider: LLMProvider | str) -> None:
+    def delete_provider(provider: LLMProvider | str) -> None
     ```
-    Clears the env variable and writes a blank version to the GCP secret.
+    Adds a blank secret version (mounts refresh to empty) and blanks the in-process
+    override.
 
 * Get default model
     ```python
@@ -100,13 +112,15 @@ store *and* update the cache + env var for immediate local effect.
 
 | Env var | Purpose |
 |---|---|
+| `LLM_SECRETS_DIR` | `/etc/secrets` — directory where provider key secrets are volume-mounted (each secret is a subdirectory with a `latest` file); point it at a local dir in tests to exercise the mount path |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `ZAI_API_KEY` | local-dev/tests fallback when the mount is absent; not provisioned on GCP |
 | `LLM_MODEL_DEFAULT` | optional fallback default model when the Firestore `config/llm` doc is absent or unreadable; not provisioned by Terraform (Firestore is the source of truth) |
 | `LLM_MAX_RETRIES` | `3` — litellm retries on transient provider failures |
-| `GCP_PROJECT_ID` | when set, keys/models are read from & written to Secret Manager / Firestore; when unset, the module runs in env-only mode (local dev/tests) |
+| `GCP_PROJECT_ID` | when set, key writes go to Secret Manager and the default model is read from/written to Firestore; when unset, the module runs in env-only mode (local dev/tests) |
 
 The provider is selected by the model string prefix (litellm convention):
 
-| Prefix / example | Provider | API key env var | Secret id |
+| Prefix / example | Provider | Local-dev env var | Secret id (= mount file name) |
 |---|---|---|---|
 | `gpt-4o`, `gpt-4o-mini` | OpenAI | `OPENAI_API_KEY` | `openai-api-key` |
 | `claude-3-5-sonnet-20241022` | Anthropic | `ANTHROPIC_API_KEY` | `anthropic-api-key` |
@@ -118,12 +132,19 @@ so a key changed via `update_provider` takes effect on the very next completion.
 
 ## Infra
 
+Provider secrets are mounted in both the Cloud Run service (`volumes` / `volume_mounts`
+in `infra/cloud_run.tf`) and the discovery Cloud Function (`secret_volumes` in
+`infra/cloud_functions.tf`), each at `/etc/secrets/<secret_id>` with no version pinned —
+the mount materializes every version plus a `latest` entry, which is what the client
+reads. Every runtime needs `roles/secretmanager.secretAccessor` on the per-provider
+secrets (scoped, not project-wide).
+
 `update_provider` / `delete_provider` / `set_default_model` write to GCP Secret Manager
 and Firestore, so the service they run in needs:
 - `roles/secretmanager.secretVersionAdder` on the per-provider secrets (scoped, not project-wide),
 - Firestore write access.
 
-Reads need `roles/secretmanager.secretAccessor`. See `infra/secrets.tf` and `infra/cloud_run.tf`.
+See `infra/secrets.tf`, `infra/cloud_run.tf`, `infra/cloud_functions.tf`.
 
 ## Boundaries
 

@@ -40,6 +40,12 @@ locals {
   # Provider slugs must match applybot.llm.providers.LLMProvider;
   # secret ids follow the "<slug>-api-key" convention.
   llm_providers = toset(["openai", "anthropic", "gemini", "glm"])
+
+  # Secret id per slug (static strings): used by the IAM grants and the volume
+  # mounts in cloud_run.tf / cloud_functions.tf, whose for_each keys must be
+  # known at plan time -- the secrets' `.id`s are not, until the first apply
+  # creates them.
+  llm_secret_ids = { for slug in local.llm_providers : slug => "${slug}-api-key" }
 }
 
 resource "google_secret_manager_secret" "llm_provider_key" {

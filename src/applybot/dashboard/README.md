@@ -143,14 +143,19 @@ Place your GCP service-account JSON at the repo root as `service-account.json`
 The dashboard is the surface where users update LLM provider keys and the
 default model on the fly (`applybot.llm.client.update_provider` /
 `delete_provider` / `set_default_model`). Those calls write to GCP Secret
-Manager (keys) and Firestore (`config/llm.default_model`); the store layer's
-TTL cache propagates changes across services within seconds.
+Manager (keys) and Firestore (`config/llm.default_model`). Key propagation is
+via **Secret Manager volume mounts**: runtimes read
+`/etc/secrets/<secret_id>/latest` on each completion, and the platform
+refreshes the mounted file when a new version is added — no restart or
+redeploy needed (typically within minutes). The writing process uses the new
+key immediately via an in-process override.
 
 **Infra wiring (done):** the Cloud Run service account has scoped
 `roles/secretmanager.secretAccessor` (read) and `roles/secretmanager.secretVersionAdder`
 (write) on the per-provider secrets (`openai-api-key`, `anthropic-api-key`,
-`gemini-api-key`, `glm-api-key`); LLM keys are no longer bound via `secret_key_ref` env vars
-(those resolve only at cold-start). See `infra/cloud_run.tf` / `infra/secrets.tf`.
+`gemini-api-key`, `glm-api-key`); the mounts themselves live in
+`infra/cloud_run.tf` / `infra/cloud_functions.tf` (see `infra/secrets.tf` for
+the secret ids).
 
 **TODO (code):** expose dashboard endpoints that call `update_provider` /
 `delete_provider` / `set_default_model` behind the existing TOTP auth. The

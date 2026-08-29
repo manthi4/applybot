@@ -8,12 +8,13 @@ code change.
 
 Provider API keys and the default model are **mutable at runtime** -- callers
 may update or delete providers and change the default model while the app is
-deployed. Keys live in GCP Secret Manager (I/O shims in
-:mod:`applybot.llm._backends`); the default model lives in a Firestore
+deployed. Keys live in GCP Secret Manager and are delivered to every runtime
+as volume-mounted files (``<LLM_SECRETS_DIR>/<secret_id>/latest``, refreshed
+by the platform when a new version is added), so this module simply re-reads
+the file on each access -- there is no key cache. Writes go through the I/O
+shims in :mod:`applybot.llm._backends`. The default model lives in a Firestore
 ``config/llm`` document accessed via :mod:`applybot.models.config` (the models
-component owns all Firestore CRUD). This module owns the short-TTL in-process
-caches (:class:`_TTLCache` instances, not ``functools.lru_cache``) so every
-service importing it picks up changes within seconds without a redeploy.
+component owns all Firestore CRUD) behind a short-TTL cache.
 
 There is deliberately no ``config.py`` / settings object: every value is read
 fresh from the environment or the backing store on each access, because these
@@ -29,6 +30,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any, overload
 
 import litellm
@@ -47,9 +49,9 @@ from .providers import (
 logger = logging.getLogger(__name__)
 
 
-# How long a cached value (key / model) is trusted before re-fetching the
-# backing store. Keeps per-completion latency low while still propagating
-# updates across services within seconds.
+# How long the cached default model is trusted before re-fetching Firestore.
+# Keeps per-completion latency low while still propagating updates across
+# services quickly.
 _CACHE_TTL_SECONDS = 30.0
 
 _DEFAULT_MODEL_DOC = "llm"
@@ -106,30 +108,59 @@ class _TTLCache[K, V]:
 
 
 # ---------------------------------------------------------------------------
-# Key store: env var (in-process) + Secret Manager (cross-service), TTL cached
+# Key lookup: in-process override → mounted secret file → env var
 # ---------------------------------------------------------------------------
 
-_key_cache = _TTLCache[LLMProvider, str]()
+# Directory where provider key secrets are volume-mounted (one subdirectory
+# per secret, holding version files including a `latest` entry). Overridable
+# so tests can point it at a local directory.
+_SECRETS_DIR_ENV = "LLM_SECRETS_DIR"
+_DEFAULT_SECRETS_DIR = "/etc/secrets"
+
+# Keys set via update_provider()/delete_provider() in this process. They take
+# effect immediately, without waiting for the platform to refresh the volume
+# mount (which typically takes minutes).
+_key_overrides: dict[LLMProvider, str] = {}
+
+
+def _mounted_key(provider: LLMProvider) -> str:
+    """Read the provider's key from the volume-mounted secret, or ``""``.
+
+    GCP mounts each provider secret as a directory of version files with a
+    ``latest`` entry and refreshes it when a new version is added, so this
+    read always returns the current key. Whitespace is stripped because
+    versions seeded outside Terraform can carry a trailing newline.
+    """
+    path = (
+        Path(os.environ.get(_SECRETS_DIR_ENV, _DEFAULT_SECRETS_DIR))
+        / provider.secret_id
+        / "latest"
+    )
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+    except OSError:
+        logger.warning("Failed to read mounted secret %s", path)
+        return ""
 
 
 def _get_provider_key(provider: LLMProvider) -> str:
     """Return the API key for ``provider``.
 
-    Serves from the TTL cache, else from the env var, else from Secret Manager
-    (which populates both the cache and the env var so litellm can also find it).
+    Order: in-process override (set by update/delete in this process), the
+    volume-mounted secret file, then the provider env var (local dev/tests,
+    where no mount exists).
     """
-    cached = _key_cache.get(provider)
-    if cached is not None:
-        return cached
+    override = _key_overrides.get(provider)
+    if override is not None:
+        return override
 
-    key = os.environ.get(provider.env_var, "")
-    if not key and _backends.project_id():
-        key = _backends.read_secret(provider)
-        if key:
-            os.environ[provider.env_var] = key
+    mounted = _mounted_key(provider)
+    if mounted:
+        return mounted
 
-    _key_cache.set(provider, key)
-    return key
+    return os.environ.get(provider.env_var, "")
 
 
 def get_configured_providers() -> list[LLMProvider]:
@@ -140,26 +171,25 @@ def get_configured_providers() -> list[LLMProvider]:
 def update_provider(provider: LLMProvider | str, api_key: str) -> None:
     """Set ``provider``'s API key.
 
-    Writes the key to the process env var (immediate effect locally) and to
-    GCP Secret Manager so other services pick it up within the cache TTL.
+    Adds a new version in GCP Secret Manager -- other services pick it up when
+    the platform refreshes their volume mount -- and records an in-process
+    override so this process uses the new key immediately.
     """
     if not isinstance(provider, LLMProvider):
         provider = LLMProvider(provider)
-    os.environ[provider.env_var] = api_key
-    _key_cache.set(provider, api_key)
+    _key_overrides[provider] = api_key
     if _backends.project_id():
         try:
             _backends.write_secret(provider, api_key)
-        except Exception:  # noqa: BLE001 - env is set; SM failure is non-fatal
+        except Exception:  # noqa: BLE001 - override is set; SM failure is non-fatal
             logger.exception("Failed to write %s key to Secret Manager", provider)
 
 
 def delete_provider(provider: LLMProvider | str) -> None:
-    """Delete ``provider``'s key: clear the env var and set the secret to blank."""
+    """Delete ``provider``'s key: blank secret version + blank in-process override."""
     if not isinstance(provider, LLMProvider):
         provider = LLMProvider(provider)
-    os.environ.pop(provider.env_var, None)
-    _key_cache.pop(provider)
+    _key_overrides[provider] = ""
     if _backends.project_id():
         try:
             _backends.write_secret(provider, "")
