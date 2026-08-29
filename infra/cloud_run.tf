@@ -10,18 +10,32 @@ resource "google_project_iam_member" "cloud_run_firestore" {
   member  = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
-# Secret Manager accessor
-resource "google_project_iam_member" "cloud_run_secrets" {
-  project = var.project_id
-  role    = "roles/secretmanager.secretAccessor"
-  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+# Secret Manager access — scoped per secret, not project-wide.
+#
+# secretAccessor: read access for secrets bound via secret_key_ref (serpapi,
+#   dashboard-totp) and for the per-provider LLM keys read live by
+#   applybot.llm.client's store layer on each cache miss.
+resource "google_secret_manager_secret_iam_member" "cloud_run_secret_accessor" {
+  for_each = toset([
+    google_secret_manager_secret.serpapi_key.id,
+    google_secret_manager_secret.dashboard_totp_secret.id,
+    google_secret_manager_secret.llm_provider_key["openai"].id,
+    google_secret_manager_secret.llm_provider_key["anthropic"].id,
+    google_secret_manager_secret.llm_provider_key["gemini"].id,
+    google_secret_manager_secret.llm_provider_key["glm"].id,
+  ])
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
-# Vertex AI access for Cloud Run (Claude via Vertex)
-resource "google_project_iam_member" "cloud_run_vertex_ai" {
-  project = var.project_id
-  role    = "roles/aiplatform.user"
-  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+# secretVersionAdder: write access so update_provider() / delete_provider() can
+# add new key versions at runtime (near-real-time key rotation across services).
+resource "google_secret_manager_secret_iam_member" "cloud_run_secret_adder" {
+  for_each  = google_secret_manager_secret.llm_provider_key
+  secret_id = each.value.id
+  role      = "roles/secretmanager.secretVersionAdder"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
 # GCS bucket access for Cloud Run
@@ -62,14 +76,10 @@ resource "google_cloud_run_v2_service" "applybot" {
       }
 
       env {
-        name  = "VERTEX_REGION"
-        value = var.vertex_region
-      }
-
-      env {
         name  = "GCS_BUCKET_NAME"
         value = google_storage_bucket.data.name
       }
+
       env {
         name  = "DISCOVERY_FUNCTION_URL"
         value = google_cloudfunctions2_function.discovery.url
@@ -130,8 +140,8 @@ resource "google_cloud_run_v2_service" "applybot" {
   depends_on = [
     google_project_service.services,
     google_project_iam_member.cloud_run_firestore,
-    google_project_iam_member.cloud_run_secrets,
-    google_project_iam_member.cloud_run_vertex_ai,
+    google_secret_manager_secret_iam_member.cloud_run_secret_accessor,
+    google_secret_manager_secret_iam_member.cloud_run_secret_adder,
     google_storage_bucket_iam_member.cloud_run_storage,
   ]
 

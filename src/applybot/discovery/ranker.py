@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from applybot.config import settings
 from applybot.discovery.scrapers.base import RawJob
-from applybot.llm.client import get_llm
+from applybot.llm.client import complete
 from applybot.models.profile import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -124,10 +124,12 @@ For each job, provide:
 
 Consider: skill match, experience relevance, seniority level, industry fit, location preferences."""
 
-    result = get_llm().structured_output(
+    result = complete(
+        None,
+        None,
         prompt,
-        BatchScoreResult,
         system="You are an expert recruiter matching candidates to jobs. Be calibrated: most jobs should score 30-70, only truly exceptional matches above 85.",
+        output_type=BatchScoreResult,
     )
 
     scored: list[tuple[RawJob, int, str]] = []

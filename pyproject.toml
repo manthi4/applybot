@@ -4,10 +4,10 @@ version = "0.1.0"
 description = "AI-powered job application automation"
 requires-python = ">=3.12"
 dependencies = [
-    "anthropic[vertex]>=0.40.0",
-    "google-genai>=1.0.0",
+    "litellm>=1.50.0",
     "uvicorn>=0.32.0",
     "google-cloud-firestore>=2.19.0",
+    "google-cloud-secret-manager>=2.20.0",
     "google-cloud-storage>=2.10.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",

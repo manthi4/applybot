@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from fasthtml.common import (
@@ -31,11 +33,11 @@ from applybot.dashboard.services.resume_storage import (
     MAX_RESUME_SIZE,
     FileTooLargeError,
     InvalidFileTypeError,
-    ResumeParseError,
     ResumeStorageError,
     get_resume_download_response,
     store_uploaded_resume,
 )
+from applybot.dashboard.services.resume_to_profile import resume_to_profile
 from applybot.models.profile import ContactInfo, UserProfile
 
 logger = logging.getLogger(__name__)
@@ -188,8 +190,6 @@ def register(rt: Any) -> None:  # noqa: C901
             text, kind = _FLASH_MESSAGES[error]
             flash_items.append(alert(text, kind))
 
-        if p.enrichment_warning:
-            flash_items.append(alert(p.enrichment_warning, "error"))
 
         flash: Any = Div(*flash_items) if flash_items else ""
 
@@ -434,7 +434,7 @@ def register(rt: Any) -> None:  # noqa: C901
     def get_resume() -> Response:
         profile = UserProfile.get()
         if profile is not None:
-            response = get_resume_download_response(profile)
+            response = get_resume_download_response(profile.resume_path)
             if response is not None:
                 return response
         return RedirectResponse("/profile?error=no_resume", status_code=303)
@@ -455,19 +455,44 @@ def register(rt: Any) -> None:  # noqa: C901
         if profile is None:
             profile = UserProfile(name="")
 
+        filename = getattr(upload, "filename", "") or ""
+
+        # 1. Save the resume to storage (independent of the profile). The
+        #    service returns the storage object name; the page records it on
+        #    the profile and persists, so resume_path survives even if the
+        #    enrichment step below fails.
         try:
-            store_uploaded_resume(
-                content, getattr(upload, "filename", "") or "", profile
-            )
+            object_name = store_uploaded_resume(content, filename)
         except InvalidFileTypeError:
             return RedirectResponse("/profile?error=invalid_file_type", status_code=303)
         except FileTooLargeError:
             return RedirectResponse("/profile?error=file_too_large", status_code=303)
-        except ResumeParseError:
-            return RedirectResponse("/profile?error=parse_failed", status_code=303)
         except ResumeStorageError:
             logger.exception("Unexpected resume storage failure")
             return RedirectResponse("/profile?error=parse_failed", status_code=303)
+
+        profile.resume_path = object_name
+        # 2. Enrich the profile from the resume (separate service, blocking LLM).
+        #    Spool the uploaded bytes to a temp file for the parser; the two
+        #    services share no state beyond the profile object the page passes.
+        ext = Path(filename).suffix.lower()
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
+        try:
+            updated_profile = resume_to_profile(tmp_path, profile)
+            updated_profile.resume_path = object_name
+            updated_profile.save()
+        except Exception:
+            # Parsing (unsupported format, missing pypdf) or LLM enrichment
+            # (API error, malformed/invalid structured output) can both raise
+            # here. The resume is already in storage either way — persist
+            # resume_path so the upload is never orphaned.
+            profile.save()
+            logger.exception("Failed to enrich profile from uploaded resume")
+            return RedirectResponse("/profile?error=parse_failed", status_code=303)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
         return RedirectResponse("/profile?msg=resume_uploaded", status_code=303)
 

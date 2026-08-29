@@ -1,8 +1,18 @@
-project_id           = "your-gcp-project-id"
-region               = "us-central1"
-vertex_region        = "us-east5"
-serpapi_key          = ""
+project_id            = "your-gcp-project-id"
+region                = "us-central1"
+
+# LLM — the default model is not configured here; it lives in Firestore and
+# is set at runtime via the dashboard (see src/applybot/llm/README.md).
+
+# Per-provider LLM API keys — optional deploy-time seed; leave blank to set
+# at runtime via the dashboard (see src/applybot/llm/README.md).
+openai_api_key        = ""
+anthropic_api_key     = ""
+gemini_api_key        = ""
+glm_api_key           = ""
+
+serpapi_key           = ""
 # Generate with: `applybot setup-auth` (prints the secret + otpauth URI).
 # Enter the same secret in your authenticator app AND here.
 dashboard_totp_secret = ""
-image_tag            = "latest"
+image_tag             = "latest"

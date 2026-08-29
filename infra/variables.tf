@@ -9,10 +9,32 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "vertex_region" {
-  description = "Vertex AI region for LLM access — used by both Gemini (google-genai SDK) and Anthropic Claude (anthropic Vertex SDK). Use a specific region like us-east5, us-central1, europe-west1."
+variable "openai_api_key" {
+  description = "OpenAI API key. Stored in Secret Manager secret openai-api-key; read live by applybot.llm.client. Leave blank to seed via update_provider() at runtime."
   type        = string
-  default     = "us-east5"
+  sensitive   = true
+  default     = ""
+}
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key. Stored in Secret Manager secret anthropic-api-key; read live by applybot.llm.client. Leave blank to seed via update_provider() at runtime."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "gemini_api_key" {
+  description = "Google Gemini API key. Stored in Secret Manager secret gemini-api-key; read live by applybot.llm.client. Leave blank to seed via update_provider() at runtime."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "glm_api_key" {
+  description = "Z.AI (GLM) API key, env var ZAI_API_KEY. Stored in Secret Manager secret glm-api-key; read live by applybot.llm.client. Leave blank to seed via update_provider() at runtime."
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 variable "serpapi_key" {

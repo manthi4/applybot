@@ -5,9 +5,9 @@
 # per-module dependency tracking; the canonical, project-wide list lives in the
 # root pyproject.toml. Keep these versions in sync with pyproject.toml.
 #
-# The dashboard also imports sibling applybot packages (config, models,
-# application, discovery, llm, storage, tracking); their runtime deps are
-# declared in the root pyproject.toml and each module's own requirements.in.
+# The dashboard also imports sibling applybot packages (models, application,
+# discovery, llm, storage); their runtime deps are declared in the root
+# pyproject.toml and each module's own requirements.in.
 
 # FastHTML web framework + PicoCSS (frontend, theme, components, pages).
 python-fasthtml>=0.12.0
@@ -18,5 +18,8 @@ uvicorn>=0.32.0
 # TOTP authentication (frontend.py login flow).
 pyotp>=2.9.0
 
-# .docx resume parsing (services/resume.py).
+# .docx resume parsing (services/resume_to_profile.py).
 python-docx>=1.1.0
+
+# PDF resume text extraction (services/resume_to_profile.py).
+pypdf>=4.0.0

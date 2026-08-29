@@ -138,6 +138,19 @@ gcloud functions call applybot-discovery --region=us-central1
 - The orchestrator is the only component that writes to the database; individual scrapers return `RawJob` dataclasses
 - Greenhouse/Lever scrapers require curated company slug lists (currently empty — needs population)
 
+### LLM keys & model (near-real-time updates)
+
+The discovery Cloud Function picks up LLM provider keys and the default model
+at runtime — not only at cold-start. The shared `llm` module
+(`applybot.llm.client`) fetches keys from GCP Secret Manager and the default
+model from Firestore through a short-TTL cache, so the function propagates
+updates within seconds of a `update_provider()` / `set_default_model()` call.
+
+Infra wiring (done in `infra/cloud_functions.tf` / `infra/secrets.tf`):
+- the function's runtime service account (the shared Cloud Run SA) has scoped `roles/secretmanager.secretAccessor` on the per-provider secrets (`openai-api-key`, `anthropic-api-key`, `gemini-api-key`, `glm-api-key`),
+- LLM keys are no longer bound via a `secret_key_ref` env-var (those resolve only at cold-start); the store layer reads them live,
+- `GCP_PROJECT_ID` is set so the store layer is active.
+
 ## Tests
 
 Tests live in `src/applybot/discovery/tests/` alongside the component code.

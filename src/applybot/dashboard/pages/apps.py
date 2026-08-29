@@ -406,9 +406,6 @@ def register(rt: Any) -> None:
             if profile is None:
                 return alert("No profile found -- cannot re-tailor resume.", "error")
             raise NotImplementedError("Re-tailoring is not implemented in this version.")
-            Application.update(app_id, tailored_resume_path=str(new_path))
-            app.tailored_resume_path = str(new_path)
-            return _resume_section(app)
         except Exception as exc:
             return alert(f"Re-tailor failed: {exc}", "error")
 

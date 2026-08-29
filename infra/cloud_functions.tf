@@ -61,8 +61,7 @@ resource "google_cloudfunctions2_function" "discovery" {
     service_account_email = google_service_account.cloud_run.email
 
     environment_variables = {
-      GCP_PROJECT_ID  = var.project_id
-      VERTEX_REGION   = var.region
+      GCP_PROJECT_ID = var.project_id
     }
 
     secret_environment_variables {
@@ -76,7 +75,8 @@ resource "google_cloudfunctions2_function" "discovery" {
   depends_on = [
     google_project_service.services,
     google_project_iam_member.cloud_run_firestore,
-    google_project_iam_member.cloud_run_secrets,
+    google_secret_manager_secret_iam_member.cloud_run_secret_accessor,
+    google_secret_manager_secret_iam_member.cloud_run_secret_adder,
   ]
 }
 

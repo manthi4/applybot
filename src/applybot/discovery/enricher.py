@@ -7,7 +7,7 @@ import logging
 from pydantic import BaseModel
 
 from applybot.discovery.scrapers.base import RawJob
-from applybot.llm.client import get_llm
+from applybot.llm.client import complete
 from applybot.models.job import Job
 
 logger = logging.getLogger(__name__)
@@ -76,11 +76,12 @@ Tasks:
 Return the verified fields and all extracted data."""
 
     try:
-        enrichment = get_llm().structured_output(
+        enrichment = complete(
+            None,
+            None,
             prompt,
-            JobEnrichment,
             system=_SYSTEM,
-            tier="fast",
+            output_type=JobEnrichment,
         )
         job.title = enrichment.title.strip() or job.title
         job.company = enrichment.company.strip() or job.company

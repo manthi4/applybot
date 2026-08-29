@@ -21,7 +21,7 @@ This section is meant to give an outline of each component in the applybot syste
         * Applications carry a `status` field: `ready_for_review`, `approved`, `submitted`, `received`, `interview`, `offer`, `rejected`, or `withdrawn` (see `ApplicationStatus` in `models/application.py`).
 4. **Dashboard** — Web UI for reviewing and approving discoverd jobs, managing applications, editing profile, and viewing pipeline statistics.
 
-5. **LLM Engine** - Modular engine exposing a consistent API (text completion, structured output, tool calls) to the rest of the components. Backends are pluggable via `LLM_PROVIDER` — Gemini or Anthropic Claude, both routed through Vertex AI with Google ADC auth (no separate API key).
+5. **LLM Engine** - Provider-agnostic LLM client exposing a consistent API (text completion + structured output) to the rest of the components. The active provider and default model are configurable at runtime without redeploying (see the [LLM README](src/applybot/llm/README.md)).
 
 **Human-in-the-loop**: The agent prepares everything, but never submits without explicit approval. Safety guardrail: the agent never submits without explicit approval.
 
@@ -43,12 +43,11 @@ applybot/
 ├── infra/                  # Terraform IaC (Cloud Run, Cloud Functions, Firestore, GCS, secrets)
 ├── src/applybot/
 │   ├── application/        # Resume parsing/generation, tailoring, Q&A, cover letters
-│   ├── dashboard/          # FastHTML web UI (pages/, services/, components/, theme)
-│   ├── discovery/          # Job discovery pipeline + scrapers/ + Cloud Function entry point
-│   ├── llm/                # LLM client (Gemini + Anthropic backends via Vertex AI)
+│   ├── dashboard/          # FastHTML web UI
+│   ├── discovery/          # Job discovery pipeline + Cloud Function entry point
+│   ├── llm/                # Provider-agnostic LLM client
 │   ├── models/             # Pydantic models + Firestore CRUD (Job, Application, UserProfile)
 │   ├── cli.py              # `applybot` CLI (serve, setup-auth)
-│   ├── config.py           # Pydantic Settings (env-based)
 │   └── storage.py          # GCS storage layer for file storage (resumes, etc.)
 └── tests/                  # Integration test suite
 ```
@@ -65,7 +64,7 @@ The top level tests/ repo is intended for integration tests involving multiple c
 ## Cross-Cutting Dependencies
 
 - **LLM Engine** — Used by: Discovery Function, Application Preperation Function, Dashboard
-- **Models** — Shared Firestore data layer accessed by all components
+- **Models** — Shared Firestore data layer accessed by all components; all Firestore reads and writes go through `models` — no other component talks to Firestore directly
 
 ---
 
@@ -129,7 +128,7 @@ pytest
 
 | Decision | Rationale |
 |---|---|
-| Gemini/Claude via Vertex AI (no LangChain) | Better GCP integration, ADC auth, provider toggle via `LLM_PROVIDER`, no separate API key |
+| Provider-agnostic LLM abstraction (no LangChain) | Swap providers with a config change; API key and default model are runtime-mutable — no vendor lock-in (details in the LLM component README) |
 | Firestore (serverless NoSQL) | No DB server to manage or pay for; generous free tier, scales automatically |
 | Human-in-the-loop | Agent never submits without explicit approval |
 | Resume honesty guardrail | Tailoring can only rephrase/reorder, not fabricate |
@@ -144,7 +143,7 @@ pytest
 
 ## Deployment
 
-ApplyBot is hosted on **Google Cloud Platform** in a single GCP project (ID configured at deploy time via Terraform). The default region is `us-central1`; Vertex AI LLM calls use `us-east5`.
+ApplyBot is hosted on **Google Cloud Platform** in a single GCP project (ID configured at deploy time via Terraform). The default region is `us-central1`.
 
 ### Compute Services
 
@@ -162,7 +161,7 @@ The dashboard scales 0–1 (serverless, pay-per-use). Discovery runs on a Cloud 
 ## Cost Considerations
 
 - **SerpAPI**: ~$50/month for 5,000 searches
-- **Vertex AI LLM calls (Gemini/Claude)**: Costs depend on usage; billed through GCP; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
+- **LLM calls (OpenAI / Anthropic / Gemini)**: Costs depend on usage; billed directly by whichever provider's API key is configured; configurable limits via `MAX_APPLICATIONS_PER_DAY` and `DISCOVERY_MAX_JOBS_PER_RUN`
 - **Greenhouse/Lever APIs**: Free (public)
 - **Firestore**: Free tier (1 GiB storage + 50K reads/day) — essentially free at low usage
 - **GCP Cloud Functions**: Free tier covers light usage

@@ -65,7 +65,6 @@ class TestUserProfileModel:
         assert profile.education == []
         assert profile.preferences == {}
         assert profile.resume_path == ""
-        assert profile.enrichment_warning == ""
         assert isinstance(profile.updated_at, datetime)
 
     def test_repr(self):
@@ -108,7 +107,6 @@ class TestProfileSerialization:
             "education": [],
             "preferences": {},
             "resume_path": "",
-            "enrichment_warning": "",
             "updated_at": datetime.now(UTC),
         }
         profile = UserProfile._from_doc(_StubDoc(legacy))
@@ -127,7 +125,6 @@ class TestProfileSerialization:
             "education": [],
             "preferences": {},
             "resume_path": "",
-            "enrichment_warning": "",
             "updated_at": datetime.now(UTC),
         }
         profile = UserProfile._from_doc(_StubDoc(legacy))
